@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package uk.mr_biz.fourlink
 
 import org.json.JSONArray

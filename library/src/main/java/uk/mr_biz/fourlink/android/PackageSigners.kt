@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package uk.mr_biz.fourlink.android
 
 import android.content.pm.PackageManager

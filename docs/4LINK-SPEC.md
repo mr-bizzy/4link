@@ -1,8 +1,9 @@
 # 4Link — one interface through which our apps ask each other to do things
 
-Status: DRAFT 2, 2026-10-02, with the owner's rulings on draft 1 applied
-(family list by build type, submodule, "Connected apps", command-mode
-trigger). Version 1.0 of the protocol.
+Status: DRAFT 3, 2026-10-02. Draft 3 adds the date line in the skill prompt
+(§12) and licenses the library Apache-2.0. Draft 2 applied the owner's rulings
+on draft 1 (family list by build type, submodule, "Connected apps",
+command-mode trigger). Version 1.0 of the protocol.
 
 ## 1. What it is
 
@@ -285,7 +286,11 @@ never fails.
   model (the same provider cascade tidy-up uses) with an instruction to reply
   with exactly one function call as JSON (`{"function": id, "arguments":
   {...}}`) or `{"none": reason}`. The reply is validated against the schema
-  before anything happens.
+  before anything happens. The instruction carries one line giving the
+  current moment — weekday, date, 24-hour time, time zone id and UTC offset —
+  so "tomorrow at 3" is resolved against it, and tells the model to answer
+  dates and times as ISO-8601 local time with no zone or offset; the caller
+  must pass the moment (`SkillPrompt.instructions(sources, now)` has no default).
 - Effect `change` or `delete`: a confirmation in 4Dictate's ConfirmButton
   style (app, function title, arguments in plain words, Do it / Cancel).
   Family `read` runs directly, and its result is shown.

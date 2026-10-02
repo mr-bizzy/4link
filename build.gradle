@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Versions match 4Dictate's root build (Bizzy-Ring/build.gradle) so the library
 // compiles identically whether built here or inside a member app.
 plugins {
