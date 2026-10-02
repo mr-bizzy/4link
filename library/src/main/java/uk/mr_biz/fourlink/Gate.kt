@@ -18,11 +18,17 @@ class ProviderGate(
     private val rate: RateLimiter = RateLimiter(),
     private val audit: AuditLog,
     private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * The app itself, by uid: its own pairing screen and Settings read its
+     * own catalogue through its own door, whatever its family list says
+     * (found 2026-10-02 when Stranger, trusting no key, refused itself).
+     */
+    private val isSelf: (Caller) -> Boolean = { false },
 ) {
 
     /** Family, paired (still the same app, still installed) or unknown (§4 `hello`). */
     fun standing(caller: Caller): Standing = when {
-        family.isFamily(caller) -> Standing.FAMILY
+        isSelf(caller) || family.isFamily(caller) -> Standing.FAMILY
         pairing(caller) != null -> Standing.PAIRED
         else -> Standing.UNKNOWN
     }

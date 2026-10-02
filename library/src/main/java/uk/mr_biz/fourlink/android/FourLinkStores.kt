@@ -49,7 +49,9 @@ class FourLinkStores private constructor(context: Context) {
     /** The family list (§5a), as this BUILD TYPE resolves the resource. */
     val family: Family by lazy { Family(app.resources.getStringArray(uk.mr_biz.fourlink.R.array.fourlink_family_digests).toList()) }
 
-    val gate: ProviderGate by lazy { ProviderGate(family, pairings, signers, audit = audit) }
+    val gate: ProviderGate by lazy {
+        ProviderGate(family, pairings, signers, audit = audit, isSelf = { it.uid == android.os.Process.myUid() })
+    }
 
     companion object {
         @Volatile private var instance: FourLinkStores? = null

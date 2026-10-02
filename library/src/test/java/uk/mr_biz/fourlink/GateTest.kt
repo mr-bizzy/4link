@@ -76,6 +76,13 @@ class GateTest {
         assertNull("the voided pairing is gone, so the list cannot show a grant that no longer holds", pairings.get("com.example.stranger"))
     }
 
+    @Test fun `an app is always family to itself, by uid, whatever its family list says`() {
+        signers.install(10077, "com.example.stranger", OTHER_DIGEST)
+        val selfGate = ProviderGate(Family(emptyList()), pairings, signers, RateLimiter(now = clock), audit, clock, isSelf = { it.uid == 10077 })
+        assertEquals(Standing.FAMILY, selfGate.standing(caller(10077)))
+        assertEquals(Standing.UNKNOWN, selfGate.standing(caller(10001)))
+    }
+
     @Test fun `a spoofed FAMILY package name is not family`() {
         signers.install(10043, "uk.mr_biz.fourzones", SPOOF_DIGEST)
         assertEquals(Standing.UNKNOWN, gate.standing(caller(10043)))
