@@ -1,0 +1,6 @@
+// Versions match 4Dictate's root build (Bizzy-Ring/build.gradle) so the library
+// compiles identically whether built here or inside a member app.
+plugins {
+    id 'com.android.library' version '8.7.3' apply false
+    id 'org.jetbrains.kotlin.android' version '2.3.21' apply false
+}

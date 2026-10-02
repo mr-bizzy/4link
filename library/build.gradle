@@ -1,0 +1,25 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// The 4Link library (docs/4LINK-SPEC.md §13). No UI, no accessibility code:
+// a test below fails the build if either ever appears here.
+android {
+    namespace 'uk.mr_biz.fourlink'
+    compileSdk 36
+    defaultConfig { minSdk 33 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlin { jvmToolchain(17) }
+    testOptions { unitTests.returnDefaultValues = true }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    // android.jar's org.json is stubbed in unit tests; the real one makes the
+    // JSON tests exercise the JSON (as 4Dictate's app module does).
+    testImplementation 'org.json:json:20231013'
+}

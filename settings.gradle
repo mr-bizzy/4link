@@ -1,0 +1,7 @@
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+rootProject.name = '4link'
+// The library alone. Member apps (4Dictate first) include this same directory
+// from their own settings.gradle, so there is one copy of the code and the
+// tests run from either side.
+include ':library'
