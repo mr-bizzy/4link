@@ -49,7 +49,11 @@ abstract class FourLinkProvider : ContentProvider() {
     }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        val caller = CallerIdentity.identify(Binder.getCallingUid(), stores.signers)
+        val uid = Binder.getCallingUid()
+        val caller = CallerIdentity.identify(uid, stores.signers)
+        // A uid with no package (the adb shell, a dead process) is still a
+        // knock on the door, and the log says so — hello excepted (§6).
+        if (caller == null && method != FourLink.METHOD_HELLO) stores.gate.record("uid:$uid", method, "unidentified")
         val reply = when (method) {
             FourLink.METHOD_HELLO -> core.hello(caller)
             FourLink.METHOD_CATALOGUE -> core.catalogue(caller)
