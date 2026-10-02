@@ -122,8 +122,8 @@ class GateTest {
         assertTrue(log.all { it.timeMs == clock.now })
     }
 
-    @Test fun `family is the release digest plus our own signer, never a bare package name`() {
-        val f = Family.of(OTHER_DIGEST)
+    @Test fun `family is a list of digests, never a bare package name`() {
+        val f = Family(listOf(FourLink.FAMILY_RELEASE_DIGEST, OTHER_DIGEST))
         assertTrue(f.isFamily(Caller(1, "anything", FourLink.FAMILY_RELEASE_DIGEST)))
         assertTrue(f.isFamily(Caller(1, "anything", OTHER_DIGEST.uppercase())))
         assertTrue(!f.isFamily(Caller(1, "uk.mr_biz.fourdictate", SPOOF_DIGEST)))

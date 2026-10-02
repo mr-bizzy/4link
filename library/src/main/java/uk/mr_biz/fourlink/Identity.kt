@@ -54,16 +54,14 @@ object CallerIdentity {
 }
 
 /**
- * The certificates that make a caller family (§5a): the stored release
- * digest, plus whatever this app itself is signed with.
+ * The certificates that make a caller family (§5a): a LIST of digests from
+ * the library's `fourlink_family_digests` resource — the release certificate
+ * always, the workstation debug certificate in debug builds only. Not "the
+ * same signer as me": a release build must never widen the family by being
+ * built somewhere else.
  */
 class Family(digests: Collection<String>) {
     val digests: Set<String> = digests.map { it.lowercase() }.toSet()
 
     fun isFamily(caller: Caller): Boolean = caller.certDigest.lowercase() in digests
-
-    companion object {
-        fun of(ownDigest: String?): Family =
-            Family(listOfNotNull(FourLink.FAMILY_RELEASE_DIGEST, ownDigest))
-    }
 }

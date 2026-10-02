@@ -34,10 +34,11 @@ object FourLink {
     const val EXTRA_FUNCTIONS = "uk.mr_biz.4link.extra.FUNCTIONS"
 
     /**
-     * The stored family digest (§5a): 4Dictate's release certificate, the one
-     * 4Zones pins for its B75 door. A provider also trusts its own signer, so
-     * two debug builds on one workstation are family to each other without a
-     * debug digest ever being written down.
+     * The release family digest (§5a): 4Dictate's release certificate, the
+     * one 4Zones pins for its B75 door. The LIST a build trusts is the
+     * `fourlink_family_digests` resource (release only in src/main; plus the
+     * debug certificate in src/debug); this constant exists for tests and
+     * for naming it in code.
      */
     const val FAMILY_RELEASE_DIGEST = "7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9"
 

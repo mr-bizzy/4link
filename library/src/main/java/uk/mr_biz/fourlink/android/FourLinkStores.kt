@@ -41,12 +41,13 @@ class FourLinkStores private constructor(context: Context) {
 
     val signers: PackageSigners by lazy { PackageSigners(app.packageManager) }
 
-    /** This app's own signing certificate, which is family by definition (§5a). */
+    /** This app's own signing certificate, for showing on screen. */
     val ownDigest: String? by lazy {
         signers.signerDigests(app.packageName)?.let(CallerIdentity::identityDigest)
     }
 
-    val family: Family by lazy { Family.of(ownDigest) }
+    /** The family list (§5a), as this BUILD TYPE resolves the resource. */
+    val family: Family by lazy { Family(app.resources.getStringArray(uk.mr_biz.fourlink.R.array.fourlink_family_digests).toList()) }
 
     val gate: ProviderGate by lazy { ProviderGate(family, pairings, signers, audit = audit) }
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- THE FAMILY (4LINK-SPEC.md §5a): the signing-certificate digests a caller
+     may carry to be trusted without pairing. This file is what a RELEASE build
+     resolves: the release certificate and nothing else. src/debug adds the
+     workstation debug certificate for debug builds only. FamilyPinTest holds
+     both files to that. -->
+<resources>
+    <string-array name="fourlink_family_digests">
+        <!-- 4Dictate's release certificate (the one 4Zones pins too). -->
+        <item>7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9</item>
+    </string-array>
+</resources>

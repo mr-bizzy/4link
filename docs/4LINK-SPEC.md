@@ -1,7 +1,8 @@
 # 4Link — one interface through which our apps ask each other to do things
 
-Status: DRAFT 1 for the owner's agreement, 2026-10-02. Nothing in it ships
-until agreed. Version 1.0 of the protocol.
+Status: DRAFT 2, 2026-10-02, with the owner's rulings on draft 1 applied
+(family list by build type, submodule, "Connected apps", command-mode
+trigger). Version 1.0 of the protocol.
 
 ## 1. What it is
 
@@ -150,14 +151,21 @@ be a stranger. Every decision below is made on the (package, digest) pair.
 
 ### 5a. Family
 
-The caller is family when its certificate digest equals one of ours: the
-stored family digest (4Dictate's release certificate,
-`7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9`, the same
-digest 4Zones pins) or the certificate the provider app itself is signed
-with. The second rule makes two debug builds family to each other on a
-workstation without ever shipping a debug digest: a release build is signed
-with the release key, so its own digest IS the family digest. Family callers
-have full access to the catalogue.
+The caller is family when its certificate digest is in the family LIST the
+library carries as a resource (`fourlink_family_digests`): the release
+certificate `7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9`
+(the same digest 4Zones pins) in every build, plus the workstation debug
+certificate in DEBUG builds only (`src/debug`). A test holds the two files to
+that, as 4Zones' ControlPinTest does. The list is never "whatever signed me":
+a release build must not widen the family by being built elsewhere. Family
+callers have full access to the catalogue.
+
+Play App Signing: every 4Link app published on Google Play MUST be enrolled
+with OUR OWN release key uploaded through PEPK, never a Google-generated key.
+Play re-signs installs with the enrolled key; if it is not ours, Play installs
+of our apps carry a different certificate, are not in the family list, and
+every family check between them fails. (4Dictate's enrolment is in
+play/PLAY_CONSOLE.md.)
 
 ## 6. Pairing (user-approved, for non-family callers)
 
@@ -194,7 +202,7 @@ have full access to the catalogue.
 ## 7. The other direction: a family caller using a non-family provider
 
 4Dictate may read the catalogue of, and call, a third-party provider only
-after the user has approved it in 4Dictate's own "Apps 4Dictate may use" list
+after the user has approved it in 4Dictate's own "Connected apps" page
 (Settings). The approval screen shows the app, its certificate fingerprint,
 its functions grouped by effect with the data each receives, as in section 6,
 with Delete unticked by default. What is stored mirrors a pairing: package,
@@ -264,22 +272,30 @@ never fails.
 
 ## 12. How 4Dictate uses it
 
-- 4Dictate discovers 4Link apps on start and on every package install or
-  removal, and caches their catalogues. Family catalogues are used at once;
-  other apps appear in "Apps 4Dictate may use" for the user to approve.
-- The "skill" path: the transcript and the usable catalogues go to the
-  tidy-up model (the same provider cascade tidy-up uses) with an instruction
-  to reply with exactly one function call as JSON
-  (`{"function": id, "arguments": {...}}`) or `{"none": reason}`. The reply is
-  validated against the schema before anything happens.
+- 4Dictate discovers 4Link apps whenever it needs them and caches their
+  catalogues, refetching when an app was installed or updated since (its
+  last-update time) and dropping an app when it is removed. Family
+  catalogues are used at once; other apps appear in "Connected apps" for the
+  user to approve.
+- Where it happens (owner, 2026-10-02): in COMMAND mode only, as the last
+  resort after the fixed command table, the 4Zones names and "open <app>"
+  have all matched nothing. Dictation mode is unchanged: what you say is
+  typed.
+- The "skill" path: the words and the usable catalogues go to the tidy-up
+  model (the same provider cascade tidy-up uses) with an instruction to reply
+  with exactly one function call as JSON (`{"function": id, "arguments":
+  {...}}`) or `{"none": reason}`. The reply is validated against the schema
+  before anything happens.
 - Effect `change` or `delete`: a confirmation in 4Dictate's ConfirmButton
   style (app, function title, arguments in plain words, Do it / Cancel).
-  Family `read` runs directly.
+  Family `read` runs directly, and its result is shown.
 - Execution is ONLY an `invoke` on the target app's provider. The result is
   reported on screen and on the dictation's card in Transcriptions, with the
-  timings (model, confirmation wait, invoke) in the ⏱ panel.
-- If no function fits, 4Dictate says so and keeps the words on the card. It
-  never guesses, and never falls back to driving the screen.
+  timings (the model call, the confirmation wait, the invoke) in the ⏱
+  panel's own "4Link" section.
+- If no function fits, 4Dictate answers exactly as today, "Heard … — not a
+  command. Nothing was typed.", and keeps the words on the card. It never
+  guesses, and never falls back to driving the screen.
 
 ## 13. The library
 
@@ -291,4 +307,6 @@ with rate limit and audit log; the provider base class; and a client
 (discover, hello, catalogue, invoke). Everything that decides is pure Kotlin
 behind interfaces, unit-tested on the workstation, including a spoofed
 package name with a different certificate. It lives in this repository
-(`library/`) and member apps include it by path.
+(`library/`, github.com/mr-bizzy/4link, private) and member apps include it
+as a git SUBMODULE at `4link/` in their own repository (owner, 2026-10-02),
+pointing `settings.gradle` at `4link/library`.
