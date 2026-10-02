@@ -21,12 +21,19 @@ class ProviderCoreTest {
         performed += f.id to a
         when (f.id) {
             "echo.say" -> Outcome.Ok(JSONObject().put("said", a.getString("text")).toString())
-            "echo.note" -> Outcome.Ok("""{"count":1}""")
+            "echo.note" -> if (a.getString("text") == "31 February") Outcome.BadArguments("That date does not exist.") else Outcome.Ok("""{"count":1}""")
             else -> Outcome.Refused("Wiping is switched off.")
         }
     }
     private val us = CallerIdentity.identify(10001, signers)
     private val stranger = CallerIdentity.identify(10002, signers)
+
+    @Test fun `a function's own argument rule answers bad_arguments with its sentence, and is audited`() {
+        val r = core.invoke(us, "echo.note", """{"text":"31 February"}""", "1") as Reply.Error
+        assertEquals(ErrorCode.BAD_ARGUMENTS, r.code)
+        assertEquals("That date does not exist.", r.message)
+        assertEquals(listOf("echo.note" to "bad_arguments"), audit.all().map { it.what to it.result })
+    }
 
     @Test fun `hello is always answered and names no function`() {
         assertEquals(Reply.Hello("4Link Echo", "1.0", Standing.FAMILY), core.hello(us))

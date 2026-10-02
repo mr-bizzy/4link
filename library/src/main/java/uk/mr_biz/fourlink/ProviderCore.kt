@@ -14,6 +14,8 @@ sealed interface Reply {
 sealed interface Outcome {
     /** The result object as JSON text, matching the function's output schema. */
     data class Ok(val json: String = "{}") : Outcome
+    /** An argument passed the schema but not the function's own rules, e.g. a date that does not exist (§11 `bad_arguments`). */
+    data class BadArguments(val message: String) : Outcome
     /** The provider declined for its own reason (§11 `refused`). */
     data class Refused(val message: String) : Outcome
     /** It ran and failed (§11 `failed`). */
@@ -65,6 +67,7 @@ class ProviderCore(
             .getOrElse { Outcome.Failed(it.message ?: "it failed") }
         return when (outcome) {
             is Outcome.Ok -> { gate.record(caller.packageName, id, "ok"); Reply.Json(outcome.json) }
+            is Outcome.BadArguments -> refuse(caller, id, ErrorCode.BAD_ARGUMENTS, outcome.message)
             is Outcome.Refused -> refuse(caller, id, ErrorCode.REFUSED, outcome.message)
             is Outcome.Failed -> refuse(caller, id, ErrorCode.FAILED, outcome.message)
         }
