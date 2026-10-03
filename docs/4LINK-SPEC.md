@@ -154,10 +154,15 @@ be a stranger. Every decision below is made on the (package, digest) pair.
 ### 5a. Family
 
 The caller is family when its certificate digest is in the family LIST the
-library carries as a resource (`fourlink_family_digests`): the release
-certificate `7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9`
-(the same digest 4Zones pins) in every build, plus the workstation debug
-certificate in DEBUG builds only (`src/debug`). A test holds the two files to
+library carries as a resource (`fourlink_family_digests`). The list holds one
+release key PER APP (owner's decision 2026-10-03: one set of credentials per
+app), in every build: 4Dictate's release certificate
+`7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9` (the same
+digest 4Zones pins) and 4Tasks' own release certificate
+`92c51b99e38eb2f498375cd912cea900203ce6a19069d33ce8384203a1c2ad06`; plus the workstation debug
+certificate in DEBUG builds only (`src/debug`). Every app carries the whole
+list, so each trusts the others; an app joins the family by being added to the
+list and rebuilding the members. A test holds the two files to
 that, as 4Zones' ControlPinTest does. The list is never "whatever signed me":
 a release build must not widen the family by being built elsewhere. Family
 callers have full access to the catalogue.

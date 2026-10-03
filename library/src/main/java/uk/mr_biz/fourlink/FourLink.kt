@@ -37,13 +37,16 @@ object FourLink {
     const val EXTRA_FUNCTIONS = "uk.mr_biz.4link.extra.FUNCTIONS"
 
     /**
-     * The release family digest (§5a): 4Dictate's release certificate, the
-     * one 4Zones pins for its B75 door. The LIST a build trusts is the
-     * `fourlink_family_digests` resource (release only in src/main; plus the
-     * debug certificate in src/debug); this constant exists for tests and
-     * for naming it in code.
+     * 4Dictate's release digest (§5a), the one 4Zones pins for its B75 door.
+     * The family is a LIST of per-app release keys: the `fourlink_family_digests`
+     * resource (the release certificates only in src/main; plus the debug
+     * certificate in src/debug). These constants exist for tests and for
+     * naming a key in code.
      */
     const val FAMILY_RELEASE_DIGEST = "7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9"
+
+    /** 4Tasks' own release digest (owner's decision 2026-10-03: one key per app). */
+    const val FOURTASKS_RELEASE_DIGEST = "92c51b99e38eb2f498375cd912cea900203ce6a19069d33ce8384203a1c2ad06"
 
     const val RATE_LIMIT_PER_MINUTE = 30
     const val AUDIT_LIMIT = 500
