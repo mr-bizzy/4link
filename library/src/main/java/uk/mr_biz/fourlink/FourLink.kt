@@ -26,6 +26,8 @@ object FourLink {
     const val KEY_OK = "ok"
     const val KEY_ERROR = "error"
     const val KEY_MESSAGE = "message"
+    /** Optional, on a `bad_arguments` answer only (§11a): a JSON [Suggestion]. */
+    const val KEY_SUGGESTION = "suggestion"
     /** On an invoke: the function's major version the caller read from the catalogue. */
     const val KEY_FUNCTION_VERSION = "version"
 

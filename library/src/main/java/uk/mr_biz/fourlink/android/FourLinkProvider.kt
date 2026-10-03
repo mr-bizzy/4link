@@ -98,6 +98,7 @@ abstract class FourLinkProvider : ContentProvider() {
                     putBoolean(FourLink.KEY_OK, false)
                     putString(FourLink.KEY_ERROR, r.code.wire)
                     putString(FourLink.KEY_MESSAGE, r.message)
+                    r.suggestion?.let { putString(FourLink.KEY_SUGGESTION, it.toJson()) }
                 }
             }
         }

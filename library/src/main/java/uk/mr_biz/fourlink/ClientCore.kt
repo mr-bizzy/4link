@@ -4,7 +4,7 @@ package uk.mr_biz.fourlink
 /** What came back from a provider, read by VALUE (§4, §11). */
 sealed interface InvokeResult {
     data class Ok(val json: String) : InvokeResult
-    data class Error(val code: ErrorCode, val message: String) : InvokeResult
+    data class Error(val code: ErrorCode, val message: String, val suggestion: Suggestion? = null) : InvokeResult
     /** The provider was never reached; [why] is this side's own sentence. */
     data class Unreachable(val why: String) : InvokeResult
 }
@@ -44,7 +44,9 @@ object ClientCore {
 
     private fun error(values: Map<String, Any?>?): InvokeResult.Error? {
         val code = ErrorCode.fromWire(values?.get(FourLink.KEY_ERROR) as? String) ?: return null
-        return InvokeResult.Error(code, values?.get(FourLink.KEY_MESSAGE) as? String ?: code.wire)
+        // A suggestion is read only on bad_arguments (§11a); on any other code it is ignored.
+        val suggestion = if (code == ErrorCode.BAD_ARGUMENTS) Suggestion.parse(values?.get(FourLink.KEY_SUGGESTION) as? String) else null
+        return InvokeResult.Error(code, values?.get(FourLink.KEY_MESSAGE) as? String ?: code.wire, suggestion)
     }
 
     /** The user's sentence for a result. */

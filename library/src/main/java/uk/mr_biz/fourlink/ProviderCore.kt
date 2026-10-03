@@ -7,7 +7,7 @@ import org.json.JSONObject
 sealed interface Reply {
     data class Hello(val app: String, val version: String, val standing: Standing) : Reply
     data class Json(val json: String) : Reply
-    data class Error(val code: ErrorCode, val message: String) : Reply
+    data class Error(val code: ErrorCode, val message: String, val suggestion: Suggestion? = null) : Reply
 }
 
 /** What a function did (the provider's handler answers one of these). */
@@ -15,7 +15,7 @@ sealed interface Outcome {
     /** The result object as JSON text, matching the function's output schema. */
     data class Ok(val json: String = "{}") : Outcome
     /** An argument passed the schema but not the function's own rules, e.g. a date that does not exist (§11 `bad_arguments`). */
-    data class BadArguments(val message: String) : Outcome
+    data class BadArguments(val message: String, val suggestion: Suggestion? = null) : Outcome
     /** The provider declined for its own reason (§11 `refused`). */
     data class Refused(val message: String) : Outcome
     /** It ran and failed (§11 `failed`). */
@@ -67,7 +67,7 @@ class ProviderCore(
             .getOrElse { Outcome.Failed(it.message ?: "it failed") }
         return when (outcome) {
             is Outcome.Ok -> { gate.record(caller.packageName, id, "ok"); Reply.Json(outcome.json) }
-            is Outcome.BadArguments -> refuse(caller, id, ErrorCode.BAD_ARGUMENTS, outcome.message)
+            is Outcome.BadArguments -> refuse(caller, id, ErrorCode.BAD_ARGUMENTS, outcome.message, outcome.suggestion)
             is Outcome.Refused -> refuse(caller, id, ErrorCode.REFUSED, outcome.message)
             is Outcome.Failed -> refuse(caller, id, ErrorCode.FAILED, outcome.message)
         }
@@ -79,9 +79,9 @@ class ProviderCore(
         return read.substringBefore('.').toIntOrNull() == function.major
     }
 
-    private fun refuse(caller: Caller, what: String, code: ErrorCode, message: String): Reply.Error {
+    private fun refuse(caller: Caller, what: String, code: ErrorCode, message: String, suggestion: Suggestion? = null): Reply.Error {
         gate.record(caller.packageName, what, code.wire)
-        return Reply.Error(code, message)
+        return Reply.Error(code, message, suggestion)
     }
 
     private fun unidentified(): Reply.Error =

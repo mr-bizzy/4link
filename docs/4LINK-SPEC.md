@@ -1,7 +1,8 @@
 # 4Link — one interface through which our apps ask each other to do things
 
-Status: DRAFT 3, 2026-10-02. Draft 3 adds the date line in the skill prompt
-(§12) and licenses the library Apache-2.0. Draft 2 applied the owner's rulings
+Status: DRAFT 4, 2026-10-03. Draft 4 adds the optional `suggestion` on a
+`bad_arguments` answer (§11a), for "did you mean". Draft 3 added the date line
+in the skill prompt (§12) and licensed the library Apache-2.0. Draft 2 applied the owner's rulings
 on draft 1 (family list by build type, submodule, "Connected apps",
 command-mode trigger). Version 1.0 of the protocol.
 
@@ -129,7 +130,7 @@ and delete answer nothing. Three methods:
 |---|---|---|---|---|
 | `hello` | – | – | `app` (name), `4link` ("1.0"), `caller` ("family" / "paired" / "unknown") | anyone; reveals no functions |
 | `catalogue` | – | – | `json` (the catalogue; for a paired caller, only its granted functions) | family or paired |
-| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result), or `ok`=false with `error` (code) and `message` (a sentence for the user) | family, or paired and granted |
+| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result), or `ok`=false with `error` (code) and `message` (a sentence for the user), and for `bad_arguments` optionally `suggestion` (§11a) | family, or paired and granted |
 
 A call that reaches a function runs inside the provider app, on a binder
 thread; a function that needs the main thread posts to it and waits, with a
@@ -270,6 +271,51 @@ that form.
 
 `catalogue` answers `not_paired` or `rate_limited` the same way. `hello`
 never fails.
+
+### 11a. Suggestions ("did you mean")
+
+Sometimes a provider can see what the caller probably meant but must not act on
+a guess: the user said "mark the sounder task done" and the provider has a task
+called "Get back to Sandra Elaine…". It answers `bad_arguments`, as always, with
+a `message` that stands on its own (a caller that has never heard of
+suggestions shows it and nothing else), and may add ONE optional Bundle key:
+
+| Key | Value |
+|---|---|
+| `suggestion` | a JSON object as a string: `{"question": "Did you mean “Get back to Sandra Elaine about her reservation”?", "function": "tasks.complete", "arguments": {"id": 4}}` |
+
+- `question`: one sentence for the user, at most 200 characters.
+- `function`: the id of a function in THIS provider's catalogue (usually the one
+  just called). `arguments`: its arguments, valid against that function's input
+  schema.
+- Meaning: NOTHING was done. If the user agrees, the caller invokes `function`
+  with `arguments`.
+
+The provider never acts on a suggestion by itself, and never offers one that
+would do something the caller's own request did not ask for (a "did you mean"
+for a completion offers a completion, not a deletion).
+
+The caller:
+
+- treats `question` as text from the provider, like a description (§8): for a
+  non-family provider it is truncated, shown as third-party text, and never
+  obeyed;
+- looks the function up in the catalogue it already read and approved, takes
+  the effect from THAT, and ignores any claim in the suggestion; a function it
+  has not read or the user has not approved is dropped;
+- validates `arguments` against the function's input schema (§8); if invalid,
+  the suggestion is dropped and the plain `message` is shown;
+- for `change` and `delete` asks the user (P3), naming the app, the function
+  and the arguments in plain words as well as showing `question`; a "yes" to the
+  question alone is not a confirmation of arguments the user cannot see;
+- invokes at most once for one suggestion, with no automatic retry and no
+  chaining: an answer to that call may carry a new suggestion, which needs the
+  user's yes again.
+
+Unknown keys are ignored (§10), so this changes no protocol major. A suggestion
+reveals information from the provider's data (here, a task title) to the caller,
+so a provider offers one only to a caller that could read that data anyway:
+family, or a paired app granted a read function that returns it.
 
 ## 12. How 4Dictate uses it
 
