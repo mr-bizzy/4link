@@ -119,7 +119,7 @@ data class FunctionSpec(
             require(ID.matches(id)) { "id \"$id\" is not <area>.<verb>" }
             val version = o.optString("version", "1.0")
             require(Regex("\\d+\\.\\d+").matches(version)) { "version \"$version\" is not major.minor" }
-            val effect = requireNotNull(Effect.fromWire(o.optString("effect"))) { "effect must be read, change or delete" }
+            val effect = requireNotNull(Effect.fromWireOrChange(o.optString("effect"))) { "effect is missing (read, create, change or delete)" }
             val input = o.optJSONObject("input")?.let { Schema.parse(it) } ?: Schema.NOTHING
             val output = o.optJSONObject("output")?.let { Schema.parse(it) } ?: Schema.NOTHING
             require(input is Schema.Obj) { "input must be an object" }

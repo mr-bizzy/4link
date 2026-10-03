@@ -52,11 +52,15 @@ reviewer can check each of the following against the code:
   voice commands (a spoken phrase mapped to a fixed action). 4Link adds no
   accessibility-driven behaviour. The accessibility disclosure and
   `play/ACCESSIBILITY_SPEC.md` do not change.
-- P3. Every model-chosen action that changes or deletes anything needs the
-  user's explicit confirmation on screen (a "Do it / Cancel" dialog naming the
-  app, the function and the arguments in plain words) before it is invoked.
-  The app therefore never acts on its own. Only family "read" functions run
-  without the dialog, because they change nothing.
+- P3. Every model-chosen action that creates, changes or deletes anything is
+  confirmed on screen (a "Do it / Cancel" dialog naming the app, the function
+  and the arguments in plain words) before it is invoked, EXCEPT where the user
+  has switched confirmation off for `create` and/or `change` in the calling
+  app (owner's decision 2026-10-03; both off by default). `delete` is ALWAYS
+  confirmed. A caller that skips a confirmation must tell the user what was
+  done (for example in a notification). The library's default is that every
+  effect but `read` needs confirmation, `create` included. Family "read"
+  functions run without the dialog, because they change nothing.
 - P4. Data passed to non-family (paired) apps is declared: the Play Data
   safety answers and the 4Dictate privacy policy are updated before 4Link
   ships, and the pairing/approval screens show what each function receives.
@@ -111,8 +115,11 @@ Per function:
   `required`), `string` (with `maxLength`, `enum`), `number`, `boolean`.
   Nothing else: no arrays, no nesting below one object level, no `$ref`.
 - `output`: the same subset, describing the `json` the function returns.
-- `effect`: `"read"` (changes nothing), `"change"` (creates or alters
-  something) or `"delete"` (removes something).
+- `effect`: `"read"` (changes nothing), `"create"` (makes something new),
+  `"change"` (alters something that exists) or `"delete"` (removes
+  something). A reader that does not know a value treats it as `"change"`
+  (forward-compatible: it asks before running it); a missing value makes the
+  entry no function.
 
 Limits are enforced by the reader, not trusted from the writer: a title or
 description over the limit is truncated on reading, and a function whose
@@ -179,13 +186,13 @@ play/PLAY_CONSOLE.md.)
 - Who asks: a caller sends an explicit intent, action
   `uk.mr_biz.4link.action.PAIR`, to the provider app's pairing activity, with
   the string-array extra `uk.mr_biz.4link.extra.FUNCTIONS` listing the
-  function ids it wants (or the effect classes `read`, `change`, `delete` to
+  function ids it wants (or the effect classes `read`, `create`, `change`, `delete` to
   mean every function of that class).
 - The provider app shows a pairing screen ONLY in response to that intent,
   never on its own: the requesting app's name and icon; a short fingerprint
   of its signing certificate (the first 16 hex digits of the digest, in
   groups of four); each requested function in plain words, grouped Read /
-  Change / Delete, each with what data it receives (its input fields); and
+  Create / Change / Delete, each with what data it receives (its input fields); and
   the choice to approve all, approve some, or refuse. Delete-class functions
   are unticked by default. The requesting app is identified from the
   activity's calling package AND its certificate, so the screen names the app
@@ -234,7 +241,7 @@ instructions. The caller:
   arguments, or to answer "none" — the reply is parsed as JSON, validated
   against the chosen function's input schema, and anything else (prose, two
   functions, a function not in the approved list) is treated as "none";
-- requires the confirmation in P3 for every non-family `change` or `delete`,
+- requires the confirmation in P3 for every non-family `create`, `change` or `delete`,
   whatever the description or the model says, and runs no non-family function
   the user did not approve, whatever the model says.
 
@@ -310,7 +317,7 @@ The caller:
   has not read or the user has not approved is dropped;
 - validates `arguments` against the function's input schema (§8); if invalid,
   the suggestion is dropped and the plain `message` is shown;
-- for `change` and `delete` asks the user (P3), naming the app, the function
+- for `create`, `change` and `delete` asks the user (P3), naming the app, the function
   and the arguments in plain words as well as showing `question`; a "yes" to the
   question alone is not a confirmation of arguments the user cannot see;
 - invokes at most once for one suggestion, with no automatic retry and no
@@ -342,7 +349,7 @@ family, or a paired app granted a read function that returns it.
   so "tomorrow at 3" is resolved against it, and tells the model to answer
   dates and times as ISO-8601 local time with no zone or offset; the caller
   must pass the moment (`SkillPrompt.instructions(sources, now)` has no default).
-- Effect `change` or `delete`: a confirmation in 4Dictate's ConfirmButton
+- Effect `create`, `change` or `delete`: a confirmation in 4Dictate's ConfirmButton
   style (app, function title, arguments in plain words, Do it / Cancel).
   Family `read` runs directly, and its result is shown.
 - Execution is ONLY an `invoke` on the target app's provider. The result is

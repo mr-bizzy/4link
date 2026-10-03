@@ -33,7 +33,7 @@ object FourLink {
 
     /** The pairing request (§6): an explicit intent to the provider app. */
     const val ACTION_PAIR = "uk.mr_biz.4link.action.PAIR"
-    /** String array extra: function ids, or the effect names "read" / "change" / "delete". */
+    /** String array extra: function ids, or the effect names "read" / "create" / "change" / "delete". */
     const val EXTRA_FUNCTIONS = "uk.mr_biz.4link.extra.FUNCTIONS"
 
     /**
@@ -68,13 +68,23 @@ enum class Standing(val wire: String) {
 
 /** Whether a function reads, changes or deletes anything (§3). */
 enum class Effect(val wire: String) {
-    READ("read"), CHANGE("change"), DELETE("delete");
+    READ("read"), CREATE("create"), CHANGE("change"), DELETE("delete");
 
-    /** Needs the user's confirmation before a model-chosen call (P3). */
+    /**
+     * Needs the user's confirmation before a model-chosen call (P3). The library default is "yes" for everything but READ,
+     * CREATE included; a calling app may let the user switch confirmation off for CREATE and/or CHANGE (never DELETE) and then
+     * must tell the user what was done.
+     */
     val needsConfirmation: Boolean get() = this != READ
 
     companion object {
         fun fromWire(s: String?): Effect? = entries.firstOrNull { it.wire == s }
+
+        /**
+         * Forward-compatible reading of a catalogue's effect: a word this version does not know is CHANGE, so a caller built before an
+         * effect existed still asks before running it. A missing or empty value is not a function (null).
+         */
+        fun fromWireOrChange(s: String?): Effect? = if (s.isNullOrBlank()) null else fromWire(s) ?: CHANGE
     }
 }
 

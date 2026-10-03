@@ -34,11 +34,11 @@ class CatalogueTest {
         assertTrue(parsed.dropped.single().second.contains("array"))
     }
 
-    @Test fun `a bad id, effect or version drops that function`() {
+    @Test fun `a bad id, a missing effect or a bad version drops that function`() {
         val json = JSONObject(ECHO.toJson())
         val fs = json.getJSONArray("functions")
         fs.getJSONObject(0).put("id", "Say")
-        fs.getJSONObject(1).put("effect", "mutate")
+        fs.getJSONObject(1).put("effect", "")
         fs.getJSONObject(2).put("version", "two")
         val parsed = Catalogue.parse(json.toString())!!
         assertTrue(parsed.catalogue.functions.isEmpty())
