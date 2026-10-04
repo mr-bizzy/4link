@@ -126,6 +126,26 @@ description over the limit is truncated on reading, and a function whose
 schema uses anything outside the subset is dropped from the catalogue with a
 log line.
 
+### 3a. The user's own words (`x-from-speech`)
+
+A string property may carry `"x-from-speech": true`: the caller may fill it
+with the user's own words. When the caller has those words (4Dictate: the
+request after "4Dictate, …" in dictation mode, tidied with the user's own
+tidy-up), the model is told it may send a placeholder in such a field instead
+of retyping the text:
+
+- `{{said}}`: everything the user said;
+- `{{said from: <first words>}}`: from those words on, to drop a spoken lead-in
+  ("add this to my notes"). Matched word by word, ignoring case and
+  punctuation; when not found, everything is kept, so no words are lost.
+
+The caller substitutes before validation, so `maxLength` applies to the real
+text. A placeholder in an unmarked field, or when the caller has no words, makes
+the decision "none". Callers show a long value in a confirmation by its start
+and its length. Why (owner, 2026-10-04): a 5½-minute note retyped by the model
+lost the user's formatting, could change words, and risked the model's output
+limit. Readers that do not know the keyword ignore it, as JSON Schema readers do.
+
 ## 4. Transport
 
 Each member app exports one ContentProvider at authority `<package>.4link`

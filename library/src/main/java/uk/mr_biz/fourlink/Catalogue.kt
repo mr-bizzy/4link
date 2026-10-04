@@ -24,6 +24,11 @@ sealed class Schema {
         val maxLength: Int? = null,
         val enum: List<String>? = null,
         override val description: String? = null,
+        /**
+         * The caller may fill this with the user's own words (§3a): the model
+         * sends a [Said] placeholder instead of retyping a long text.
+         */
+        val fromSpeech: Boolean = false,
     ) : Schema()
 
     data class Num(override val description: String? = null) : Schema()
@@ -41,6 +46,7 @@ sealed class Schema {
                 o.put("type", "string")
                 maxLength?.let { o.put("maxLength", it) }
                 enum?.let { o.put("enum", JSONArray(it)) }
+                if (fromSpeech) o.put(Said.WIRE, true)
             }
             is Num -> o.put("type", "number")
             is Bool -> o.put("type", "boolean")
@@ -78,6 +84,7 @@ sealed class Schema {
                     maxLength = if (o.has("maxLength")) o.getInt("maxLength") else null,
                     enum = o.optJSONArray("enum")?.let { a -> (0 until a.length()).map { a.getString(it) } },
                     description = description,
+                    fromSpeech = o.optBoolean(Said.WIRE, false),
                 )
                 "number", "integer" -> Num(description)
                 "boolean" -> Bool(description)
