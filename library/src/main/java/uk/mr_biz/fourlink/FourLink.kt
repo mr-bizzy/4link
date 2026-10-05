@@ -48,6 +48,9 @@ object FourLink {
     /** 4Tasks' own release digest (owner's decision 2026-10-03: one key per app). */
     const val FOURTASKS_RELEASE_DIGEST = "92c51b99e38eb2f498375cd912cea900203ce6a19069d33ce8384203a1c2ad06"
 
+    /** 4Home's own release digest (owner, 2026-10-06: Home Assistant by voice, its own key). */
+    const val FOURHOME_RELEASE_DIGEST = "d511f22254f19fbb0a1c7d71576a0b8242e2796ee6f9c05adb5ad549c6198a8e"
+
     const val RATE_LIMIT_PER_MINUTE = 30
     const val AUDIT_LIMIT = 500
 

@@ -126,6 +126,15 @@ description over the limit is truncated on reading, and a function whose
 schema uses anything outside the subset is dropped from the catalogue with a
 log line.
 
+### 3b. Always confirmed (`"confirm": "always"`)
+
+A function may carry `"confirm": "always"`. A caller that lets its user skip
+confirmation for adds or changes (§P3) must still confirm this function, every
+time. It is for calls a misheard word must never run unseen, such as switching a
+plug that powers a rack or moving a desk (4Home, owner 2026-10-06). A DELETE is
+always confirmed anyway. Readers that don't know the field ignore it, and lose
+nothing they had before.
+
 ### 3a. The user's own words (`x-from-speech`)
 
 A string property may carry `"x-from-speech": true`: the caller may fill it

@@ -15,6 +15,7 @@ import java.io.File
 class FamilyPinTest {
     private val release = FourLink.FAMILY_RELEASE_DIGEST
     private val fourTasks = FourLink.FOURTASKS_RELEASE_DIGEST
+    private val fourHome = FourLink.FOURHOME_RELEASE_DIGEST
     private val debug = "90a86f317bf69419e362a09e9a8de99349ba8b2d7dd3e4af341c5ffd48b7404d"
 
     private fun digestsIn(file: File): List<String> =
@@ -28,11 +29,11 @@ class FamilyPinTest {
         }.toMap()
 
     @Test fun `release trusts the release certificates and nothing else`() {
-        assertEquals(listOf(release, fourTasks), digestsIn(defining().getValue("main")))
+        assertEquals(listOf(release, fourTasks, fourHome), digestsIn(defining().getValue("main")))
     }
 
     @Test fun `debug adds the workstation debug certificate and keeps the release ones`() {
-        assertEquals(listOf(release, fourTasks, debug), digestsIn(defining().getValue("debug")))
+        assertEquals(listOf(release, fourTasks, fourHome, debug), digestsIn(defining().getValue("debug")))
     }
 
     @Test fun `only main and debug define the list`() {

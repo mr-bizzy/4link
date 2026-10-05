@@ -103,6 +103,12 @@ data class FunctionSpec(
     val effect: Effect,
     val input: Schema.Obj = Schema.NOTHING,
     val output: Schema.Obj = Schema.NOTHING,
+    /**
+     * Always confirmed by the caller, even when its user switched on "add/change
+     * without asking" for this app (§P3). For calls a misheard word must never
+     * run unseen: switching a rack's power, moving a desk. Wire: "confirm":"always".
+     */
+    val confirmAlways: Boolean = false,
 ) {
     /** The major of [version]; 0 when it cannot be read. */
     val major: Int get() = version.substringBefore('.').toIntOrNull() ?: 0
@@ -115,6 +121,7 @@ data class FunctionSpec(
         put("effect", effect.wire)
         put("input", input.toJson())
         put("output", output.toJson())
+        if (confirmAlways) put("confirm", "always")
     }
 
     companion object {
@@ -140,6 +147,7 @@ data class FunctionSpec(
                 effect = effect,
                 input = input,
                 output = output,
+                confirmAlways = o.optString("confirm") == "always",
             )
         }
     }
