@@ -114,6 +114,12 @@ data class FunctionSpec(
      * frame MUST NOT list this function to a model or to a user. Wire: "frame":true.
      */
     val frame: Boolean = false,
+    /**
+     * §11b — the reasons this function MAY answer with, for a reader that wants to know them in
+     * advance. Optional, and never exhaustive by promise: a caller still handles a reason not listed.
+     * Wire: "reasons": ["4zones.grant_off", …].
+     */
+    val reasons: List<String> = emptyList(),
 ) {
     /** The major of [version]; 0 when it cannot be read. */
     val major: Int get() = version.substringBefore('.').toIntOrNull() ?: 0
@@ -128,6 +134,7 @@ data class FunctionSpec(
         put("output", output.toJson())
         if (confirmAlways) put("confirm", "always")
         if (frame) put("frame", true)
+        if (reasons.isNotEmpty()) put("reasons", org.json.JSONArray(reasons))
     }
 
     companion object {
@@ -155,6 +162,9 @@ data class FunctionSpec(
                 output = output,
                 confirmAlways = o.optString("confirm") == "always",
                 frame = o.optBoolean("frame", false),
+                reasons = o.optJSONArray("reasons")?.let { a ->
+                    (0 until a.length()).mapNotNull { a.optString(it).takeIf(FourLink::isReason) }
+                }.orEmpty(),
             )
         }
     }

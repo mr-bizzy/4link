@@ -194,7 +194,7 @@ and delete answer nothing. Three methods:
 |---|---|---|---|---|
 | `hello` | – | – | `app` (name), `4link` ("1.0"), `caller` ("family" / "paired" / "unknown") | anyone; reveals no functions |
 | `catalogue` | – | – | `json` (the catalogue; for a paired caller, only its granted functions) | family or paired |
-| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result) — and `frame` (§4a) from a `"frame": true` function — or `ok`=false with `error` (code) and `message` (a sentence for the user), and for `bad_arguments` optionally `suggestion` (§11a) | family, or paired and granted |
+| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result) — and `frame` (§4a) from a `"frame": true` function — or `ok`=false with `error` (code) and `message` (a sentence for the user), for `bad_arguments` optionally `suggestion` (§11a), and for `refused` or `failed` optionally `reason` (§11b) | family, or paired and granted |
 
 A call that reaches a function runs inside the provider app, on a binder
 thread; a function that needs the main thread posts to it and waits, with a
@@ -423,6 +423,58 @@ Unknown keys are ignored (§10), so this changes no protocol major. A suggestion
 reveals information from the provider's data (here, a task title) to the caller,
 so a provider offers one only to a caller that could read that data anyway:
 family, or a paired app granted a read function that returns it.
+
+### 11b. A reason beside the sentence (`reason`, `fixable`)
+
+A `refused` or `failed` reply MAY carry two things beside its sentence:
+
+- `fixable` (Boolean): **true when the user can fix this in settings**, false
+  when they cannot. This is the branch every caller needs: show the sentence
+  when `fixable` is true, fall back quietly when it is false or absent. It
+  works on a reason the caller has never seen, so a caller is not updated
+  each time a provider's vocabulary grows.
+- `reason` (token): a short, stable name for the refusal, for a caller that
+  needs more than `fixable`.
+
+The sentence is for a person, is shown as it is, and may be reworded at any
+time. **A caller that needs to tell one refusal from another branches on
+`fixable` or `reason`, never on the sentence.** Matching a provider's copy is
+how a caller breaks the day the copy improves. Why (2026-10-09): 4Zones
+answered every `screen.capture` refusal as `refused`, and the 4Screenshots
+caller could tell "turn this on" from "nothing you can do" only by matching
+4Zones' draft sentences.
+
+**The core vocabulary.** Unprefixed tokens are shared, so providers do not
+invent synonyms for one thing:
+
+| Token | Meaning |
+|---|---|
+| `not_set_up` | Something the function needs has never been set up |
+| `permission_off` | A permission or switch the function needs is off |
+| `not_found` | The thing asked about does not exist |
+| `busy` | The provider is doing something else; try again |
+| `unavailable` | The provider cannot do it right now |
+| `rate_limited` | Asked too often |
+| `too_large` | The request or its answer is too large |
+| `user_declined` | The user said no |
+
+- **A provider's own tokens MUST be prefixed with the provider:**
+  `4zones.grant_off`. An unprefixed token MUST be a core token. That is what
+  keeps a provider's token from colliding with a core token added later. The
+  library enforces it on the provider side: a token a provider may not declare
+  is dropped, and the sentence and `fixable` still go.
+- **Shape:** lower case; an optional `<provider>.` prefix (letters, digits,
+  `_`); then a letter, then letters, digits or `_`; at most 64 characters in
+  all. A reader accepts any well-formed token, core or not, known or not, so a
+  core token added later still reads.
+- **Frozen once shipped,** like a function id (§3). A changed meaning is a new
+  token.
+- **The catalogue MAY list a function's reasons** (`"reasons": [...]`). It is
+  optional and never a promise of completeness: a required list would have to
+  be exhaustive to be useful, and a stale one is worse than none.
+- Only on `refused` and `failed`: the other codes are the library's own and
+  already say exactly what happened. The audit log (§9) records the code, as
+  before, not the token.
 
 ## 12. How 4Dictate uses it
 

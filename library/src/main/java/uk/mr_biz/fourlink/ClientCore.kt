@@ -9,7 +9,18 @@ sealed interface InvokeResult {
      * keep it beyond the call without its user's own action (§4a).
      */
     data class Ok(val json: String, val frame: Any? = null) : InvokeResult
-    data class Error(val code: ErrorCode, val message: String, val suggestion: Suggestion? = null) : InvokeResult
+    /**
+     * §11b. [fixable] is the branch most callers need: true, show [message] (the user can fix it in
+     * settings); false or null, fall back quietly. [reason] is the provider's stable token, for a
+     * caller that needs more. NEVER match [message] instead: it is for a person and may be reworded.
+     */
+    data class Error(
+        val code: ErrorCode,
+        val message: String,
+        val suggestion: Suggestion? = null,
+        val reason: String? = null,
+        val fixable: Boolean? = null,
+    ) : InvokeResult
     /** The provider was never reached; [why] is this side's own sentence. */
     data class Unreachable(val why: String) : InvokeResult
 }
@@ -51,7 +62,12 @@ object ClientCore {
         val code = ErrorCode.fromWire(values?.get(FourLink.KEY_ERROR) as? String) ?: return null
         // A suggestion is read only on bad_arguments (§11a); on any other code it is ignored.
         val suggestion = if (code == ErrorCode.BAD_ARGUMENTS) Suggestion.parse(values?.get(FourLink.KEY_SUGGESTION) as? String) else null
-        return InvokeResult.Error(code, values?.get(FourLink.KEY_MESSAGE) as? String ?: code.wire, suggestion)
+        // §11b: read on refused and failed only; a reason only when well formed (core or prefixed,
+        // known here or not, so a core token added later still reads).
+        val own = code == ErrorCode.REFUSED || code == ErrorCode.FAILED
+        val reason = if (own) (values?.get(FourLink.KEY_REASON) as? String)?.takeIf(FourLink::isReason) else null
+        val fixable = if (own) values?.get(FourLink.KEY_FIXABLE) as? Boolean else null
+        return InvokeResult.Error(code, values?.get(FourLink.KEY_MESSAGE) as? String ?: code.wire, suggestion, reason, fixable)
     }
 
     /** The user's sentence for a result. */

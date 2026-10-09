@@ -8,7 +8,14 @@ sealed interface Reply {
     data class Hello(val app: String, val version: String, val standing: Standing) : Reply
     /** [frame] is opaque here (pure JVM); on Android it is a read-only `SharedMemory` (§4a). */
     data class Json(val json: String, val frame: Any? = null) : Reply
-    data class Error(val code: ErrorCode, val message: String, val suggestion: Suggestion? = null) : Reply
+    /** [reason] and [fixable]: §11b, beside a `refused` or `failed` sentence, or null. */
+    data class Error(
+        val code: ErrorCode,
+        val message: String,
+        val suggestion: Suggestion? = null,
+        val reason: String? = null,
+        val fixable: Boolean? = null,
+    ) : Reply
 }
 
 /** What a function did (the provider's handler answers one of these). */
@@ -21,10 +28,14 @@ sealed interface Outcome {
     data class Ok(val json: String = "{}", val frame: Any? = null) : Outcome
     /** An argument passed the schema but not the function's own rules, e.g. a date that does not exist (§11 `bad_arguments`). */
     data class BadArguments(val message: String, val suggestion: Suggestion? = null) : Outcome
-    /** The provider declined for its own reason (§11 `refused`). */
-    data class Refused(val message: String) : Outcome
-    /** It ran and failed (§11 `failed`). */
-    data class Failed(val message: String) : Outcome
+    /**
+     * The provider declined for its own reason (§11 `refused`). [message] is for a person. §11b:
+     * [reason] is an optional stable token for the caller's logic, frozen once shipped, core or
+     * prefixed with the provider; [fixable] says whether the user can fix it in settings.
+     */
+    data class Refused(val message: String, val reason: String? = null, val fixable: Boolean? = null) : Outcome
+    /** It ran and failed (§11 `failed`), with the same optional [reason] and [fixable] (§11b). */
+    data class Failed(val message: String, val reason: String? = null, val fixable: Boolean? = null) : Outcome
 }
 
 /**
@@ -81,8 +92,8 @@ class ProviderCore(
                 else -> { gate.record(caller.packageName, id, "ok"); Reply.Json(outcome.json, outcome.frame) }
             }
             is Outcome.BadArguments -> refuse(caller, id, ErrorCode.BAD_ARGUMENTS, outcome.message, outcome.suggestion)
-            is Outcome.Refused -> refuse(caller, id, ErrorCode.REFUSED, outcome.message)
-            is Outcome.Failed -> refuse(caller, id, ErrorCode.FAILED, outcome.message)
+            is Outcome.Refused -> refuse(caller, id, ErrorCode.REFUSED, outcome.message, reason = outcome.reason, fixable = outcome.fixable)
+            is Outcome.Failed -> refuse(caller, id, ErrorCode.FAILED, outcome.message, reason = outcome.reason, fixable = outcome.fixable)
         }
     }
 
@@ -92,9 +103,19 @@ class ProviderCore(
         return read.substringBefore('.').toIntOrNull() == function.major
     }
 
-    private fun refuse(caller: Caller, what: String, code: ErrorCode, message: String, suggestion: Suggestion? = null): Reply.Error {
+    private fun refuse(
+        caller: Caller,
+        what: String,
+        code: ErrorCode,
+        message: String,
+        suggestion: Suggestion? = null,
+        reason: String? = null,
+        fixable: Boolean? = null,
+    ): Reply.Error {
         gate.record(caller.packageName, what, code.wire)
-        return Reply.Error(code, message, suggestion)
+        // §11b: a token a provider may not declare (malformed, or unprefixed and not core) is
+        // dropped, never sent; the sentence and `fixable` still go.
+        return Reply.Error(code, message, suggestion, reason?.takeIf(FourLink::mayDeclareReason), fixable)
     }
 
     private fun unidentified(): Reply.Error =

@@ -30,6 +30,28 @@ object FourLink {
     const val KEY_MESSAGE = "message"
     /** Optional, on a `bad_arguments` answer only (§11a): a JSON [Suggestion]. */
     const val KEY_SUGGESTION = "suggestion"
+    /** §11b — a provider's stable token beside a `refused` or `failed` sentence. */
+    const val KEY_REASON = "reason"
+
+    /** §11b — `fixable`: true when the user can fix the refusal in settings, false when not. */
+    const val KEY_FIXABLE = "fixable"
+
+    /**
+     * §11b — what a reason token may be: a core token (`not_found`), or a provider's own, PREFIXED
+     * with the provider (`4zones.grant_off`). Lower case, letters, digits and `_`, at most 64.
+     */
+    private val REASON = Regex("(?:[a-z0-9][a-z0-9_]{0,23}\\.)?[a-z][a-z0-9_]{0,39}")
+
+    /** §11b — the shared core vocabulary. An unprefixed token MUST be one of these. */
+    val CORE_REASONS: Set<String> = setOf(
+        "not_set_up", "permission_off", "not_found", "busy", "unavailable", "rate_limited", "too_large", "user_declined",
+    )
+
+    /** Well formed: what a READER accepts, so a core token added later still reads. */
+    fun isReason(token: String): Boolean = REASON.matches(token)
+
+    /** What a PROVIDER may send: well formed, and either core or prefixed (§11b's MUST). */
+    fun mayDeclareReason(token: String): Boolean = isReason(token) && ('.' in token || token in CORE_REASONS)
     /** On an invoke: the function's major version the caller read from the catalogue. */
     const val KEY_FUNCTION_VERSION = "version"
 
