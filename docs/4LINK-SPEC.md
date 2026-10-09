@@ -155,6 +155,34 @@ and its length. Why (owner, 2026-10-04): a 5½-minute note retyped by the model
 lost the user's formatting, could change words, and risked the model's output
 limit. Readers that do not know the keyword ignore it, as JSON Schema readers do.
 
+### 3c. A frame beside the reply (`"frame": true`)
+
+A function may carry `"frame": true`: its successful reply carries a FRAME, a
+picture, beside its `json` (§4a). The first is 4Zones' `screen.capture`, one
+picture of one screen for 4Screenshots (2026-10-09).
+
+- **A caller that cannot consume a frame MUST NOT list a `"frame": true`
+  function to a model or to a user.** 4Dictate's model must never pick
+  "capture the screen" and receive pixels it throws away. Filtering is the
+  caller's job, at the point it builds what the model or the user is shown.
+- **Effect: a frame function declares `"read"`.** Taking a picture changes
+  nothing, so P3 runs it from family without a dialog, like any read.
+- **A provider MAY also mark it `"confirm": "always"` (§3b).** Read that
+  carefully: `confirm` is CALLER-side. It makes the CALLING app ask ITS user
+  before every invocation; the provider shows nothing (§4 forbids it UI during
+  an invoke). The spec permits it for a provider that wants every picture asked
+  for.
+- **4Zones does not use it, on purpose.** A dialog on every capture is what its
+  owner is trying to be rid of. 4Zones' answer instead is a per-app grant its
+  user turns on once in 4Zones (off by default), and a notification for EVERY
+  picture it hands over, naming the app and the screen. If 4Zones cannot post
+  that notification, it refuses the capture. Recorded so a later reader does
+  not take the missing `confirm` for an oversight.
+
+Readers that do not know the field ignore it, so an old caller would list the
+function. That is why the rule above is a MUST on callers, and why a provider
+should keep any frame function to the callers it names.
+
 ## 4. Transport
 
 Each member app exports one ContentProvider at authority `<package>.4link`
@@ -166,7 +194,7 @@ and delete answer nothing. Three methods:
 |---|---|---|---|---|
 | `hello` | – | – | `app` (name), `4link` ("1.0"), `caller` ("family" / "paired" / "unknown") | anyone; reveals no functions |
 | `catalogue` | – | – | `json` (the catalogue; for a paired caller, only its granted functions) | family or paired |
-| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result), or `ok`=false with `error` (code) and `message` (a sentence for the user), and for `bad_arguments` optionally `suggestion` (§11a) | family, or paired and granted |
+| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result) — and `frame` (§4a) from a `"frame": true` function — or `ok`=false with `error` (code) and `message` (a sentence for the user), and for `bad_arguments` optionally `suggestion` (§11a) | family, or paired and granted |
 
 A call that reaches a function runs inside the provider app, on a binder
 thread; a function that needs the main thread posts to it and waits, with a
@@ -177,6 +205,43 @@ Discovery: every member declares an activity with the intent filter action
 (`PackageManager.queryIntentActivities`, with a matching `<queries>` entry in
 its manifest) and derives each member's authority from its package name.
 Family members declare the same filter so one discovery serves both kinds.
+
+### 4a. A reply's frame
+
+A `"frame": true` function's `ok` reply carries ONE frame under the Bundle key
+`frame`, and never otherwise. A function that declares a frame always sends
+one; a frame from a function that does not declare one is the provider's bug,
+and the library answers `failed` instead of passing it on.
+
+- **What it is:** an `android.os.SharedMemory`, set read-only (`PROT_READ`)
+  before it leaves the provider. The receiver cannot map it writable.
+- **What describes it:** the reply's `json`, never a header inside the frame.
+  For pixels: `width`, `height`, `stride` (bytes per row) and `format`, from a
+  closed list (`"RGBA_8888"` today). The caller reads the layout; it never
+  infers it.
+- **Why shared memory, and not `openFile` or a pipe:** it keeps the single
+  door of §4, because it arrives in the reply to the call that was already
+  identified and gated, with no second door, token or expiry. It is never a
+  file on disk. And the provider has finished when it replies; it is not
+  blocked on a binder thread while the caller drains megabytes. A 1920×1080
+  frame is 8,294,400 bytes, eight times a binder transaction; base64 in JSON
+  would be 11 MB of text.
+- **Measured** (2026-10-09, API 37 emulator, two apps, so two uids): every
+  byte arrived, and the receiver's `mapReadWrite` was refused.
+- **The caller owns the frame it receives and closes it.**
+
+**A frame is an image of the user's screen, and two rules bind BOTH sides:**
+
+1. **The provider MUST honour `FLAG_SECURE`.** A window an app has protected
+   from screenshots comes out black, as it does in any screenshot. (4Zones'
+   route, `screencap` at shell uid, does: measured on an emulator and on a
+   Galaxy Tab A9+, with controls. DRM-protected video is a separate hardware
+   path, and was not tested.)
+2. **Neither side may persist a frame beyond the call without the user's own
+   action.** The provider keeps no copy. The caller may hold it while it does
+   what the user asked, and saves it only because the user chose to (pressed
+   save, accepted the picture), never by default, in a cache, or "for later".
+   This rule binds the caller as much as the provider.
 
 ## 5. Caller identity
 
@@ -281,8 +346,9 @@ makes the family case the same path as the paired case.
 
 Every provider keeps a bounded log (the last 500 calls): time, caller
 package, method or function id, and the result code. Argument values and
-results are NEVER logged. The log is visible in the provider's Settings next
-to the "Paired apps" list, and is included in a diagnostics report only in
+results are NEVER logged. A frame (§4a) is a result: it is never logged, by
+either side, in any form, not even a thumbnail. The log is visible in the
+provider's Settings next to the "Paired apps" list, and is included in a diagnostics report only in
 that form.
 
 ## 10. Versioning

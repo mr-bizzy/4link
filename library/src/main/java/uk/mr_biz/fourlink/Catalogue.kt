@@ -109,6 +109,11 @@ data class FunctionSpec(
      * run unseen: switching a rack's power, moving a desk. Wire: "confirm":"always".
      */
     val confirmAlways: Boolean = false,
+    /**
+     * §3c — a successful reply carries a frame (§4a) beside its json. A caller that cannot consume a
+     * frame MUST NOT list this function to a model or to a user. Wire: "frame":true.
+     */
+    val frame: Boolean = false,
 ) {
     /** The major of [version]; 0 when it cannot be read. */
     val major: Int get() = version.substringBefore('.').toIntOrNull() ?: 0
@@ -122,6 +127,7 @@ data class FunctionSpec(
         put("input", input.toJson())
         put("output", output.toJson())
         if (confirmAlways) put("confirm", "always")
+        if (frame) put("frame", true)
     }
 
     companion object {
@@ -148,6 +154,7 @@ data class FunctionSpec(
                 input = input,
                 output = output,
                 confirmAlways = o.optString("confirm") == "always",
+                frame = o.optBoolean("frame", false),
             )
         }
     }

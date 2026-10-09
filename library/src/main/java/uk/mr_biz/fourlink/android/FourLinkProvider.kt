@@ -7,6 +7,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
+import android.os.SharedMemory
 import android.util.Log
 import org.json.JSONObject
 import uk.mr_biz.fourlink.Caller
@@ -93,6 +94,9 @@ abstract class FourLinkProvider : ContentProvider() {
                 is Reply.Json -> {
                     putBoolean(FourLink.KEY_OK, true)
                     putString(FourLink.KEY_JSON, r.json)
+                    // §4a — the frame travels beside the json, never in it. Only a SharedMemory is
+                    // carried: it crosses the binder as a descriptor, where 8 MB of bytes could not.
+                    (r.frame as? SharedMemory)?.let { putParcelable(FourLink.KEY_FRAME, it) }
                 }
                 is Reply.Error -> {
                     putBoolean(FourLink.KEY_OK, false)

@@ -6,14 +6,19 @@ import org.json.JSONObject
 /** A reply, before it becomes a Bundle (§4). */
 sealed interface Reply {
     data class Hello(val app: String, val version: String, val standing: Standing) : Reply
-    data class Json(val json: String) : Reply
+    /** [frame] is opaque here (pure JVM); on Android it is a read-only `SharedMemory` (§4a). */
+    data class Json(val json: String, val frame: Any? = null) : Reply
     data class Error(val code: ErrorCode, val message: String, val suggestion: Suggestion? = null) : Reply
 }
 
 /** What a function did (the provider's handler answers one of these). */
 sealed interface Outcome {
-    /** The result object as JSON text, matching the function's output schema. */
-    data class Ok(val json: String = "{}") : Outcome
+    /**
+     * The result object as JSON text, matching the function's output schema. A function declared
+     * `"frame": true` also returns its [frame] (§4a), which [json] describes; on Android it is a
+     * read-only `android.os.SharedMemory`. Any other function must leave [frame] null.
+     */
+    data class Ok(val json: String = "{}", val frame: Any? = null) : Outcome
     /** An argument passed the schema but not the function's own rules, e.g. a date that does not exist (§11 `bad_arguments`). */
     data class BadArguments(val message: String, val suggestion: Suggestion? = null) : Outcome
     /** The provider declined for its own reason (§11 `refused`). */
@@ -66,7 +71,15 @@ class ProviderCore(
         val outcome = runCatching { perform(function, arguments, caller) }
             .getOrElse { Outcome.Failed(it.message ?: "it failed") }
         return when (outcome) {
-            is Outcome.Ok -> { gate.record(caller.packageName, id, "ok"); Reply.Json(outcome.json) }
+            is Outcome.Ok -> when {
+                // §4a: a frame is carried only by a function that declares it, and such a function
+                // always carries one. Either mismatch is the provider's bug, answered as a failure.
+                outcome.frame != null && !function.frame ->
+                    refuse(caller, id, ErrorCode.FAILED, "$appName answered with a picture this function does not declare.")
+                outcome.frame == null && function.frame ->
+                    refuse(caller, id, ErrorCode.FAILED, "$appName answered without the picture this function declares.")
+                else -> { gate.record(caller.packageName, id, "ok"); Reply.Json(outcome.json, outcome.frame) }
+            }
             is Outcome.BadArguments -> refuse(caller, id, ErrorCode.BAD_ARGUMENTS, outcome.message, outcome.suggestion)
             is Outcome.Refused -> refuse(caller, id, ErrorCode.REFUSED, outcome.message)
             is Outcome.Failed -> refuse(caller, id, ErrorCode.FAILED, outcome.message)

@@ -23,6 +23,8 @@ object FourLink {
     const val KEY_VERSION = "4link"
     const val KEY_CALLER = "caller"
     const val KEY_JSON = "json"
+    /** §4a — an invoke reply's one frame, a read-only `SharedMemory`, described by its [KEY_JSON]. */
+    const val KEY_FRAME = "frame"
     const val KEY_OK = "ok"
     const val KEY_ERROR = "error"
     const val KEY_MESSAGE = "message"

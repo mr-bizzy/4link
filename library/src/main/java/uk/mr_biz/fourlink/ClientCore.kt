@@ -3,7 +3,12 @@ package uk.mr_biz.fourlink
 
 /** What came back from a provider, read by VALUE (§4, §11). */
 sealed interface InvokeResult {
-    data class Ok(val json: String) : InvokeResult
+    /**
+     * [frame] is the reply's frame (§4a) when the function declares one: on Android a read-only
+     * `android.os.SharedMemory`, laid out as [json] says. The caller owns it, closes it, and MUST NOT
+     * keep it beyond the call without its user's own action (§4a).
+     */
+    data class Ok(val json: String, val frame: Any? = null) : InvokeResult
     data class Error(val code: ErrorCode, val message: String, val suggestion: Suggestion? = null) : InvokeResult
     /** The provider was never reached; [why] is this side's own sentence. */
     data class Unreachable(val why: String) : InvokeResult
@@ -38,7 +43,7 @@ object ClientCore {
         error(values)?.let { return it }
         val ok = values[FourLink.KEY_OK] as? Boolean ?: false
         val json = values[FourLink.KEY_JSON] as? String
-        return if (ok) InvokeResult.Ok(json ?: "{}")
+        return if (ok) InvokeResult.Ok(json ?: "{}", values[FourLink.KEY_FRAME])
         else InvokeResult.Unreachable("The app's answer could not be read.")
     }
 
