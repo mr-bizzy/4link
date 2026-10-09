@@ -267,6 +267,16 @@ ONCE, immediately, with a fresh acquire, under this rule:
 - **A timeout, or any answer at all, is never retried.** A `create`, `change`
   or `delete` that may have run must not run twice.
 
+**A hello before a change, so the change meets a live process and never has to
+be retried.** Invoked in the declared form (with its `FunctionSpec`), any
+function that is not `read` is preceded by a `hello`. The hello is a read, so
+it carries the retry: if the member was frozen, the hello absorbs the kill, its
+retry restarts the member, and the change goes to a live process. **If the
+hello fails even after its retry, the change is not sent** and the hello's
+failure is returned: a change is never attempted into a process the caller has
+just failed to reach (the 4Dictate PM's condition, 2026-10-09). A read gets no
+hello: it already retries itself. The id-only invoke sends no hello, as before.
+
 The effect is the function's DECLARED one, from the catalogue, never a flag
 the caller passes. A caller that invokes by id alone, without the function's
 declaration, gets no binder-failure retry. The client keeps no provider client

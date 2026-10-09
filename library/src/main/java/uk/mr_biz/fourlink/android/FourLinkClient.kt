@@ -72,9 +72,23 @@ class FourLinkClient(context: Context) {
     /**
      * Invokes [function] as its catalogue declared it. Its EFFECT decides whether a binder failure is
      * retried (§4b, [Retry]): a `read` is, anything else only if the provider was never reached.
+     *
+     * **A HELLO GOES FIRST BEFORE ANYTHING THAT IS NOT A READ, so the change meets a live process and
+     * never has to be retried.** It looks like a redundant round trip. It is not: a member the freezer
+     * has frozen can be KILLED by the first call that reaches it (§4b), and a change cannot be retried
+     * because it may have run. The hello is a read, so it carries the retry: if the member was frozen,
+     * the hello absorbs the kill, its retry restarts the member, and the change then goes to a live
+     * process. **If the hello fails even after its retry, the change is NOT sent** and the hello's
+     * failure is returned: a change is never attempted into a process just failed to reach. A read
+     * gets no hello: it already retries itself, and a hello would be a second call for nothing.
+     * (The 4Dictate PM's condition, 2026-10-09.) The id-only form below sends no hello, unchanged.
      */
-    fun invoke(packageName: String, function: FunctionSpec, argumentsJson: String): InvokeResult =
-        invoke(packageName, function.id, argumentsJson, function.major.toString(), function.effect)
+    fun invoke(packageName: String, function: FunctionSpec, argumentsJson: String): InvokeResult {
+        if (function.effect != Effect.READ && call(packageName, FourLink.METHOD_HELLO, null, null) == null) {
+            return InvokeResult.Unreachable("${labelOf(packageName)} did not answer.")
+        }
+        return invoke(packageName, function.id, argumentsJson, function.major.toString(), function.effect)
+    }
 
     /**
      * The older form, without the function's declaration: its effect is unknown, so it is treated as
