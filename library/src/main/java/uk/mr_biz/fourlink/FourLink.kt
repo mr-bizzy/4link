@@ -75,6 +75,9 @@ object FourLink {
     /** 4Home's own release digest (owner, 2026-10-06: Home Assistant by voice, its own key). */
     const val FOURHOME_RELEASE_DIGEST = "d511f22254f19fbb0a1c7d71576a0b8242e2796ee6f9c05adb5ad549c6198a8e"
 
+    /** 4Screenshots' own release digest (owner, 2026-10-09: the family's first caller-only app). */
+    const val FOURSCREENSHOTS_RELEASE_DIGEST = "6599bca48b5a7628663bf118d9d5990f78f36100e6266c213fc1991e7770e60f"
+
     const val RATE_LIMIT_PER_MINUTE = 30
     const val AUDIT_LIMIT = 500
 
