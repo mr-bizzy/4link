@@ -131,8 +131,10 @@ class FourLinkClient(context: Context) {
     /**
      * One call, and at most ONE retry (§4b): by [Retry.once], from what failed and [effect] (null for
      * hello and catalogue, which are reads). The retry acquires the provider afresh and IMMEDIATELY:
-     * it is the fresh acquire that starts a killed member, not a wait (the measured recovery took a
-     * second call 150 ms later; no delay was measured to be needed, and none is added).
+     * it is the fresh acquire that starts a killed member, not a wait. MEASURED, through this code,
+     * on an API 37 emulator, 2026-10-09: the first catalogue killed a frozen 4Zones
+     * (DeadObjectException), the immediate retry started a fresh one that answered 580 ms later, and
+     * the capture succeeded in 1,349 ms end to end. No delay is needed, and none is added.
      */
     private fun call(packageName: String, method: String, arg: String?, extras: Bundle?, effect: Effect? = null): Bundle? {
         when (val first = attempt(packageName, method, arg, extras)) {

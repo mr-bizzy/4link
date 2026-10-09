@@ -9,9 +9,11 @@ package uk.mr_biz.fourlink
  * after a minute idle, Android's freezer had frozen 4Zones; the next call reached the frozen
  * process, system_server logged "sent binder code 21 … got error" and killed it ("Sync transaction
  * while frozen"), and the caller saw no answer. A second call 150 ms later started a fresh 4Zones
- * and succeeded. Not reproduced on a second API 37 image in two runs (the frozen provider was thawed
- * and answered), so the conditions that produce it are not fully known; the retry is the remedy for
- * the failure, wherever it comes from.
+ * and succeeded. Then reproduced through THIS retry (23ab15f, a17_desk, after 90 s idle): the kill
+ * arrived as DeadObjectException, the immediate retry started a fresh 4Zones (answered in 580 ms),
+ * and the capture succeeded. Not reproduced on a second API 37 image in two runs, where the frozen
+ * provider was thawed and answered; one difference seen is that the killed 4Zones was cached at
+ * oom adj 905. The conditions are not fully known; the retry is the remedy wherever they arise.
  *
  * THE RULE, and why it is no wider:
  *

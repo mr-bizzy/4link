@@ -249,9 +249,12 @@ After a minute or so idle, Android's freezer may freeze a member. A call that
 then reaches the frozen process can make Android KILL it ("Sync transaction
 while frozen"); the caller sees no answer, and a second call starts a fresh
 member and succeeds. Measured by the 4Screenshots implementer on an API 37
-emulator, 2026-10-09, twice. Not reproduced on a second API 37 image in two
-runs, where the frozen member was thawed and answered, so the exact conditions
-are not known. It is a defect measured in one place and reasoned to be
+emulator, 2026-10-09, twice, and a third time through the library's own retry
+below, which recovered it: the immediate retry started a fresh member that
+answered 580 ms later, and the call succeeded (1,349 ms end to end). No delay
+is needed. Not reproduced on a second API 37 image in two runs, where the
+frozen member was thawed and answered (the killed member had been cached at
+oom adj 905), so the exact conditions are not known. It is a defect measured in one place and reasoned to be
 general. It is NOT offered as the explanation for any other missed call.
 
 The library's client (`FourLinkClient`) therefore retries a failed call
