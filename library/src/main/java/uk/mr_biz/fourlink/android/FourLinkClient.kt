@@ -4,6 +4,7 @@ package uk.mr_biz.fourlink.android
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import uk.mr_biz.fourlink.CallerIdentity
@@ -36,7 +37,12 @@ class FourLinkClient(context: Context) {
     fun discover(): List<Member> {
         val signers = PackageSigners(pm)
         return runCatching {
-            pm.queryIntentActivities(Intent(FourLink.ACTION_PAIR), PackageManager.ResolveInfoFlags.of(0))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(Intent(FourLink.ACTION_PAIR), PackageManager.ResolveInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(Intent(FourLink.ACTION_PAIR), 0)
+            }
         }.getOrNull().orEmpty()
             .map { it.activityInfo.packageName }
             .distinct()
@@ -90,8 +96,10 @@ class FourLinkClient(context: Context) {
         resolver.call(FourLink.authorityOf(packageName), method, arg, extras)
     } catch (e: Exception) {
         // IllegalArgumentException: no such provider. SecurityException: not
-        // exported. Either way: not reachable, and said in a sentence.
-        Log.w(TAG, "$method on $packageName failed: ${e.javaClass.simpleName}: ${e.message}")
+        // exported. Either way: not reachable, and said in a sentence. The
+        // class is the diagnosis; the message is text from another process
+        // and is not logged.
+        Log.w(TAG, "$method on $packageName failed: ${e.javaClass.simpleName}")
         null
     }
 

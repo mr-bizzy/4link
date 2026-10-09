@@ -2,6 +2,7 @@
 package uk.mr_biz.fourlink.android
 
 import android.content.pm.PackageManager
+import android.os.Build
 import uk.mr_biz.fourlink.CallerIdentity
 import uk.mr_biz.fourlink.SignerLookup
 
@@ -13,7 +14,15 @@ class PackageSigners(private val pm: PackageManager) : SignerLookup {
 
     override fun signerDigests(packageName: String): List<String>? {
         val info = runCatching {
-            pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()))
+            } else {
+                // API 31–32: the int-flag overload. Without it the call throws
+                // NoSuchMethodError, runCatching swallows it, and every caller —
+                // family included — is unidentified.
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            }
         }.getOrNull() ?: return null
         val signing = info.signingInfo ?: return emptyList()
         // The CURRENT signer(s), not the history: an app that rotated its key

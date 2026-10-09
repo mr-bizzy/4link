@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.os.Build
 import uk.mr_biz.fourlink.Caller
 import uk.mr_biz.fourlink.CallerIdentity
 import uk.mr_biz.fourlink.Catalogue
@@ -59,7 +60,14 @@ data class PairingRequest(
             val callingPackage = activity.callingPackage ?: return null
             val digests = PackageSigners(pm).signerDigests(callingPackage) ?: return null
             val digest = CallerIdentity.identityDigest(digests) ?: return null
-            val uid = runCatching { pm.getPackageUid(callingPackage, PackageManager.PackageInfoFlags.of(0)) }.getOrDefault(-1)
+            val uid = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    pm.getPackageUid(callingPackage, PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageUid(callingPackage, 0)
+                }
+            }.getOrDefault(-1)
             val wanted = intent.getStringArrayExtra(FourLink.EXTRA_FUNCTIONS).orEmpty().toSet()
             val effects = wanted.mapNotNull(Effect::fromWire).toSet()
             val requested = catalogue.functions.filter { it.id in wanted || it.effect in effects }
