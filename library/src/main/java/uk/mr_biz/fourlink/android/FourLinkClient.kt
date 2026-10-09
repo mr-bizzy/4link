@@ -6,13 +6,17 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.RemoteException
 import android.util.Log
 import uk.mr_biz.fourlink.CallerIdentity
 import uk.mr_biz.fourlink.Catalogue
 import uk.mr_biz.fourlink.ClientCore
+import uk.mr_biz.fourlink.Effect
 import uk.mr_biz.fourlink.FourLink
+import uk.mr_biz.fourlink.FunctionSpec
 import uk.mr_biz.fourlink.HelloReply
 import uk.mr_biz.fourlink.InvokeResult
+import uk.mr_biz.fourlink.Retry
 
 /**
  * The caller's side (§4, §12): find members, say hello, fetch catalogues,
@@ -24,6 +28,10 @@ import uk.mr_biz.fourlink.InvokeResult
  * for [discover] to see anything on Android 11+.
  *
  * Never call from the main thread: a provider may do real work.
+ *
+ * §4b: a call that fails at the binder is retried ONCE, immediately, by [Retry]'s rule — any
+ * failure for a read, only an unreached provider for anything else. No provider client is kept
+ * between calls, so there is no idle cache to expire.
  */
 class FourLinkClient(context: Context) {
     private val app = context.applicationContext
@@ -61,12 +69,26 @@ class FourLinkClient(context: Context) {
     fun catalogue(packageName: String): Pair<Catalogue.Parsed?, InvokeResult.Error?> =
         ClientCore.catalogue(call(packageName, FourLink.METHOD_CATALOGUE, null, null)?.toMap())
 
-    fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String): InvokeResult {
+    /**
+     * Invokes [function] as its catalogue declared it. Its EFFECT decides whether a binder failure is
+     * retried (§4b, [Retry]): a `read` is, anything else only if the provider was never reached.
+     */
+    fun invoke(packageName: String, function: FunctionSpec, argumentsJson: String): InvokeResult =
+        invoke(packageName, function.id, argumentsJson, function.major.toString(), function.effect)
+
+    /**
+     * The older form, without the function's declaration: its effect is unknown, so it is treated as
+     * one that changes something and a binder failure is NOT retried. Prefer the [FunctionSpec] form.
+     */
+    fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String): InvokeResult =
+        invoke(packageName, functionId, argumentsJson, versionRead, Effect.CHANGE)
+
+    private fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String, effect: Effect): InvokeResult {
         val extras = Bundle().apply {
             putString(FourLink.KEY_JSON, argumentsJson)
             putString(FourLink.KEY_FUNCTION_VERSION, versionRead)
         }
-        val reply = call(packageName, FourLink.METHOD_INVOKE, functionId, extras)
+        val reply = call(packageName, FourLink.METHOD_INVOKE, functionId, extras, effect)
             ?: return InvokeResult.Unreachable("${labelOf(packageName)} did not answer.")
         return ClientCore.invoke(reply.toMap())
     }
@@ -92,15 +114,65 @@ class FourLinkClient(context: Context) {
         false
     }
 
-    private fun call(packageName: String, method: String, arg: String?, extras: Bundle?): Bundle? = try {
-        resolver.call(FourLink.authorityOf(packageName), method, arg, extras)
-    } catch (e: Exception) {
-        // IllegalArgumentException: no such provider. SecurityException: not
-        // exported. Either way: not reachable, and said in a sentence. The
-        // class is the diagnosis; the message is text from another process
-        // and is not logged.
-        Log.w(TAG, "$method on $packageName failed: ${e.javaClass.simpleName}")
-        null
+    /**
+     * One call, and at most ONE retry (§4b): by [Retry.once], from what failed and [effect] (null for
+     * hello and catalogue, which are reads). The retry acquires the provider afresh and IMMEDIATELY:
+     * it is the fresh acquire that starts a killed member, not a wait (the measured recovery took a
+     * second call 150 ms later; no delay was measured to be needed, and none is added).
+     */
+    private fun call(packageName: String, method: String, arg: String?, extras: Bundle?, effect: Effect? = null): Bundle? {
+        when (val first = attempt(packageName, method, arg, extras)) {
+            is Attempt.Answered -> return first.reply
+            is Attempt.Failed -> {
+                if (!Retry.once(first.failure, effect)) return null
+                // The provider package and the exception CLASS only; never a message (§4b).
+                Log.w(TAG, "$method on $packageName: retrying once after ${first.exceptionClass}")
+            }
+        }
+        return when (val second = attempt(packageName, method, arg, extras)) {
+            is Attempt.Answered -> second.reply
+            is Attempt.Failed -> null
+        }
+    }
+
+    private sealed interface Attempt {
+        class Answered(val reply: Bundle?) : Attempt
+        class Failed(val failure: Retry.Failure, val exceptionClass: String) : Attempt
+    }
+
+    /**
+     * One transaction through an UNSTABLE client, acquired for this call and closed after it, so the
+     * failure's class is seen here (ContentResolver.call swallows it into null) and a dying provider
+     * cannot take this process with it. Nothing is cached between calls.
+     */
+    private fun attempt(packageName: String, method: String, arg: String?, extras: Bundle?): Attempt {
+        val authority = FourLink.authorityOf(packageName)
+        val client = try {
+            resolver.acquireUnstableContentProviderClient(authority)
+        } catch (e: Exception) {
+            Log.w(TAG, "$method on $packageName failed: ${e.javaClass.simpleName}")
+            return Attempt.Failed(Retry.Failure.NOT_REACHED, e.javaClass.simpleName)
+        } ?: run {
+            // No such provider: the app is not installed, or is not a member. A fact, not a failure:
+            // asking again would only ask again (measured: a retry here found nothing new).
+            Log.w(TAG, "$method on $packageName failed: no provider")
+            return Attempt.Answered(null)
+        }
+        return try {
+            Attempt.Answered(client.call(authority, method, arg, extras))
+        } catch (e: RemoteException) {
+            // DeadObjectException is a RemoteException. See Retry: it does NOT prove the call never ran.
+            Log.w(TAG, "$method on $packageName failed: ${e.javaClass.simpleName}")
+            Attempt.Failed(Retry.Failure.BINDER, e.javaClass.simpleName)
+        } catch (e: Exception) {
+            // IllegalArgumentException, SecurityException: not reachable, and said in a sentence.
+            // Not a binder failure, so never retried. The class is the diagnosis; the message is
+            // text from another process and is not logged.
+            Log.w(TAG, "$method on $packageName failed: ${e.javaClass.simpleName}")
+            Attempt.Answered(null)
+        } finally {
+            client.close()
+        }
     }
 
     private fun labelOf(packageName: String): String =

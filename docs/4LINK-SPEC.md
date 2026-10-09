@@ -243,6 +243,36 @@ and the library answers `failed` instead of passing it on.
    save, accepted the picture), never by default, in a cache, or "for later".
    This rule binds the caller as much as the provider.
 
+### 4b. One retry, and only where running twice is harmless
+
+After a minute or so idle, Android's freezer may freeze a member. A call that
+then reaches the frozen process can make Android KILL it ("Sync transaction
+while frozen"); the caller sees no answer, and a second call starts a fresh
+member and succeeds. Measured by the 4Screenshots implementer on an API 37
+emulator, 2026-10-09, twice. Not reproduced on a second API 37 image in two
+runs, where the frozen member was thawed and answered, so the exact conditions
+are not known. It is a defect measured in one place and reasoned to be
+general. It is NOT offered as the explanation for any other missed call.
+
+The library's client (`FourLinkClient`) therefore retries a failed call
+ONCE, immediately, with a fresh acquire, under this rule:
+
+- **The provider could not be acquired:** nothing reached it, so nothing ran.
+  Retried, whatever the function's effect.
+- **The transaction failed** (`DeadObjectException`, `RemoteException`): the
+  frozen kill arrives this way, but so does a provider that ran the call and
+  died before replying, and the two are the same exception class. So it is
+  retried ONLY for `hello`, `catalogue` and a function whose declared effect is
+  `read`, where running twice changes nothing.
+- **A timeout, or any answer at all, is never retried.** A `create`, `change`
+  or `delete` that may have run must not run twice.
+
+The effect is the function's DECLARED one, from the catalogue, never a flag
+the caller passes. A caller that invokes by id alone, without the function's
+declaration, gets no binder-failure retry. The client keeps no provider client
+between calls, so there is no idle connection to expire. A retry is logged
+with the provider's package and the exception's class, never its message.
+
 ## 5. Caller identity
 
 The provider identifies every caller from `Binder.getCallingUid()`, then the
