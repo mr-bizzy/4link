@@ -78,6 +78,9 @@ object FourLink {
     /** 4Screenshots' own release digest (owner, 2026-10-09: the family's first caller-only app). */
     const val FOURSCREENSHOTS_RELEASE_DIGEST = "6599bca48b5a7628663bf118d9d5990f78f36100e6266c213fc1991e7770e60f"
 
+    /** 4PDFs' own release digest (owner, 2026-10-14). */
+    const val FOURPDFS_RELEASE_DIGEST = "52bf661f8b14e2fbf716bb6a432645ca88ce8e2b8ad46360fbacb689c8ed49cc"
+
     const val RATE_LIMIT_PER_MINUTE = 30
     const val AUDIT_LIMIT = 500
 
