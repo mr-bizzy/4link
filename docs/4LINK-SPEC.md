@@ -1,6 +1,7 @@
 # 4Link — one interface through which our apps ask each other to do things
 
-Status: DRAFT 4, 2026-10-03. Draft 4 adds the optional `suggestion` on a
+Status: DRAFT 5, 2026-10-20. Draft 5 adds Links (§14): a family app hands
+its links to an app that binds keys and gestures to them. Draft 4 added the optional `suggestion` on a
 `bad_arguments` answer (§11a), for "did you mean". Draft 3 added the date line
 in the skill prompt (§12) and licensed the library Apache-2.0. Draft 2 applied the owner's rulings
 on draft 1 (family list by build type, submodule, "Connected apps",
@@ -563,3 +564,77 @@ package name with a different certificate. It lives in this repository
 (`library/`, github.com/mr-bizzy/4link, private) and member apps include it
 as a git SUBMODULE at `4link/` in their own repository (owner, 2026-10-02),
 pointing `settings.gradle` at `4link/library`.
+
+## 14. Links
+
+Why (owner, 2026-10-20): 4Zones' Links page lets the user bind a key or a
+one-handed gesture to a link, and 4Screenshots' two links appear there by
+themselves when it is installed (4Zones L11). That list is written into
+4Zones, which works for two fixed links but not for an app whose links come
+from the user's own setup (4Home: "Desk up", "John's room Relax", from what
+Home Assistant offers). This section is the standard way for any family app
+to hand its links over, so the keys and gestures stay in the app that has
+them and the app with the links needs no permission of its own.
+
+A link is a URL in the providing app's own scheme (`fourscreenshots://region`,
+`fourhome://run?...`) that the caller opens as an `ACTION_VIEW` intent. What
+opening it does is the providing app's business: it runs through the same
+path as the app's own button for that thing.
+
+### 14a. The function
+
+`links.list`, version 1.0, effect `read`, no input. Output:
+
+```json
+{ "links": "<JSON array as text>" }
+```
+
+The array is text because the schema subset has no arrays (§3), as 4Home's
+`home.object.list` does. Each element:
+
+```json
+{ "id": "light.john_s_room/scene.john_s_room_relax",
+  "name": "John's room Relax",
+  "url": "fourhome://run?link=light.john_s_room%2Fscene.john_s_room_relax",
+  "group": "John's room" }
+```
+
+- `id`: unique within the app, at most 200 characters, and FIXED: made from
+  what the link does, never from a name the user can change. A caller stores
+  a key or gesture against `<package>` + `id`, so renaming a thing in the
+  providing app renames the link and keeps the key.
+- `name`: for people, at most 60 characters, the providing app's current name
+  for it (the user's own name where the app has one).
+- `url`: the link itself, at most 500 characters, in the providing app's own
+  scheme. Never `http(s)`.
+- `group`: optional, at most 60 characters, a heading the caller may list
+  links under (4Home: the object).
+
+Limits are enforced by the reader (§3): an element over a limit, with a
+missing field or with a duplicate `id` is dropped with a log line; the rest
+are kept.
+
+### 14b. Who and when
+
+- A caller reads `links.list` only from FAMILY apps (§5a). A paired app's
+  links are not offered, in this version.
+- The caller reads it when it shows its links (the moment the user looks),
+  and when a family app is installed or updated. Nothing is pushed.
+- A link that is no longer in the list is hidden, not deleted: a key bound to
+  it stays bound and works again if the link comes back (the app re-added the
+  thing, or was reinstalled), as 4Zones L11 already does for an uninstalled
+  app.
+- The list is the providing app's, whole: the caller never edits it. What the
+  user does with a link (a key, a gesture, its own name for it) is the
+  caller's, stored on the caller's side against the `id`.
+
+### 14c. Who does what
+
+- The library carries the element format: parse (with the limits above) and
+  build, unit-tested, so provider and caller cannot drift.
+- 4Home publishes one link per object state it offers (an object's fixed
+  states: on, off, up, down, a scene of that light, ...).
+- 4Screenshots may publish its two links the same way; 4Zones' own fixed
+  list keeps working.
+- 4Zones reading `links.list` is the 4Zones project manager's to decide and
+  build, later. This section changes nothing in 4Zones.
