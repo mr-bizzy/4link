@@ -472,11 +472,20 @@ family, or a paired app granted a read function that returns it.
 
 A `refused` or `failed` reply MAY carry two things beside its sentence:
 
-- `fixable` (Boolean): **true when the user can fix this in settings**, false
-  when they cannot. This is the branch every caller needs: show the sentence
-  when `fixable` is true, fall back quietly when it is false or absent. It
-  works on a reason the caller has never seen, so a caller is not updated
-  each time a provider's vocabulary grows.
+- `fixable` (Boolean): **true only when the user can fix this in the
+  provider's own settings**, false otherwise (a device without power, a server
+  that is switched off: the fix is real but not in the app). A fixable
+  refusal is always shown, by every caller, because the user can act on it.
+  A caller that HAS another way to do the job may fall back quietly when
+  `fixable` is false or absent (4Screenshots falls back to the sharing prompt). A caller that has
+  NO other way (a key press, a voice command, a tap) always shows the
+  provider's sentence, and adds that it can be fixed in the provider's
+  settings only when `fixable` is true. It works on a reason the caller has
+  never seen, so a caller is not updated each time a provider's vocabulary
+  grows.
+  Why (owner, 2026-10-21): a key press refused because a light had no power
+  showed nothing, and a voice command was told to look in settings for a
+  light switch.
 - `reason` (token): a short, stable name for the refusal, for a caller that
   needs more than `fixable`.
 
