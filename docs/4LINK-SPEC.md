@@ -301,9 +301,7 @@ be a stranger. Every decision below is made on the (package, digest) pair.
 The caller is family when its certificate digest is in the family LIST the
 library carries as a resource (`fourlink_family_digests`). The list holds one
 release key PER APP (owner's decision 2026-10-03: one set of credentials per
-app), in every build: 4Zones' own release certificate
-`98d58b42c8f6a02c26eb34e6c42981cc2b92ea67d4680b26e884593ab471f19d` (owner,
-2026-10-20: the family's first app, its Play app signing key), 4Dictate's release certificate
+app), in every build: 4Dictate's release certificate
 `7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9` (the same
 digest 4Zones pins) and 4Tasks' own release certificate
 `92c51b99e38eb2f498375cd912cea900203ce6a19069d33ce8384203a1c2ad06`; plus the workstation debug
