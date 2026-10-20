@@ -578,10 +578,12 @@ Home Assistant offers). This section is the standard way for any family app
 to hand its links over, so the keys and gestures stay in the app that has
 them and the app with the links needs no permission of its own.
 
-A link is a URL in the providing app's own scheme (`fourscreenshots://region`,
-`fourhome://run?...`) that the caller opens as an `ACTION_VIEW` intent. What
-opening it does is the providing app's business: it runs through the same
-path as the app's own button for that thing.
+A link is a 4Link call (owner, 2026-10-20: "YOU WILL USE 4LINK"): one of the
+providing app's own functions with its arguments filled in. The caller runs
+it with `invoke` on the providing app, exactly as any other call, so caller
+identity, family, pairing and grants (§5, §6) all apply, and the `confirm`
+the provider returns is honoured as for any call (§3b). Nothing is opened as
+an intent, and a link carries no address of its own.
 
 ### 14a. The function
 
@@ -597,8 +599,10 @@ The array is text because the schema subset has no arrays (§3), as 4Home's
 ```json
 { "id": "light.john_s_room/scene.john_s_room_relax",
   "name": "John's room Relax",
-  "url": "fourhome://run?link=light.john_s_room%2Fscene.john_s_room_relax",
-  "group": "John's room" }
+  "group": "John's room",
+  "function": "home.scene.start",
+  "version": "2.0",
+  "arguments": { "entity": "scene.john_s_room_relax" } }
 ```
 
 - `id`: unique within the app, at most 200 characters, and FIXED: made from
@@ -607,14 +611,21 @@ The array is text because the schema subset has no arrays (§3), as 4Home's
   providing app renames the link and keeps the key.
 - `name`: for people, at most 60 characters, the providing app's current name
   for it (the user's own name where the app has one).
-- `url`: the link itself, at most 500 characters, in the providing app's own
-  scheme. Never `http(s)`.
 - `group`: optional, at most 60 characters, a heading the caller may list
   links under (4Home: the object).
+- `function`: a function id of the providing app (§3), `version` its
+  `major.minor`, and `arguments` a JSON object: the call the link makes.
+
+When a key or gesture is pressed, the caller invokes the `function`,
+`version` and `arguments` of the LATEST list it read for that `id`, not a copy
+kept from long ago. The call is checked like any other: a function the caller
+may not use, or arguments the provider no longer accepts, are refused by the
+provider as usual.
 
 Limits are enforced by the reader (§3): an element over a limit, with a
-missing field or with a duplicate `id` is dropped with a log line; the rest
-are kept.
+missing or ill-formed field (a `function` that is not a 4Link id, a `version`
+that is not `major.minor`, `arguments` that are not an object) or with a
+duplicate `id` is dropped with a log line; the rest are kept.
 
 ### 14b. Who and when
 
@@ -635,7 +646,8 @@ are kept.
 - The library carries the element format: parse (with the limits above) and
   build, unit-tested, so provider and caller cannot drift.
 - 4Home publishes one link per object state it offers (an object's fixed
-  states: on, off, up, down, a scene of that light, ...).
+  states: on, off, up, down, a scene of that light, ...), each the same call
+  `home.object.list` gives for that state.
 - 4Screenshots may publish its two links the same way; 4Zones' own fixed
   list keeps working.
 - 4Zones reading `links.list` is the 4Zones project manager's to decide and
