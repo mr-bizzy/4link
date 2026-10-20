@@ -138,8 +138,7 @@ data class FunctionSpec(
     }
 
     companion object {
-        /** A function id: <area>.<verb>. Links (§14) checks a link's function with it too. */
-        internal val ID = Regex("[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+")
+        private val ID = Regex("[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+")
 
         /** Reads one function, applying the limits; throws when it is not one. */
         fun parse(o: JSONObject): FunctionSpec {
