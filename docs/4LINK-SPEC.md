@@ -1,6 +1,7 @@
 # 4Link — one interface through which our apps ask each other to do things
 
-Status: DRAFT 4, 2026-10-03. Draft 4 adds the optional `suggestion` on a
+Status: DRAFT 5, 2026-10-20. Draft 5 adds Links (§14), approved by the owner
+after the 4Zones PM's review. Draft 4 added the optional `suggestion` on a
 `bad_arguments` answer (§11a), for "did you mean". Draft 3 added the date line
 in the skill prompt (§12) and licensed the library Apache-2.0. Draft 2 applied the owner's rulings
 on draft 1 (family list by build type, submodule, "Connected apps",
@@ -563,3 +564,73 @@ package name with a different certificate. It lives in this repository
 (`library/`, github.com/mr-bizzy/4link, private) and member apps include it
 as a git SUBMODULE at `4link/` in their own repository (owner, 2026-10-02),
 pointing `settings.gradle` at `4link/library`.
+
+## 14. Links
+
+Why: an app that binds keys and gestures (4Zones' Links page) should be able to offer the things
+another family app can do for the user's own setup, with nothing to type (4Home: "Desk up",
+"John's room Relax"). Today 4Zones' family links are fixed inside 4Zones, which suits fixed links
+but not links that come from the user's Home Assistant.
+
+A link is a 4Link call: one of the providing app's own functions with its arguments filled in.
+It changes nothing about how 4Link works. The link list is read with an ordinary call, and a link
+is run with an ordinary `invoke`, so caller identity (§5), family (§5a), pairing and grants (§6),
+and `confirm` (§3b) apply exactly as they do today.
+
+### 14a. The function
+
+`links.list`, version 1.0, effect `read`, no input. Output `{ "links": "<JSON array as text>" }`
+(text, because the schema subset has no arrays, §3). Each element:
+
+    { "id": "light.john_s_room/scene.john_s_room_relax",
+      "name": "John's room Relax",
+      "group": "John's room",
+      "function": "home.scene.start",
+      "version": "2.0",
+      "arguments": { "entity": "scene.john_s_room_relax" } }
+
+- `id`: unique within the app, at most 200 characters, never changes: made from what the link
+  does, never from a name the user can change. Renaming a thing renames the link and keeps any
+  key bound to it.
+- `name`: for people, at most 60 characters.
+- `group`: optional, at most 60 characters, a heading to list links under.
+- `function`, `version`, `arguments`: the call. The function must be in the provider's own
+  catalogue; `arguments` is a JSON object.
+- No icon. The caller shows the provider's app icon. (Never a bitmap in a reply: a bitmap in a
+  shortcut reply crashed the caller, 4Zones L12.)
+- Order: the array's order is the order. Groups appear in the order of their first link.
+
+The reader enforces the limits (§3): an element over a limit, ill-formed, or with a duplicate
+`id` is dropped with a log line; the rest are kept.
+
+### 14b. Using links
+
+- The caller keeps only the provider's package and the link's `id`, plus what is the user's own:
+  the key or gesture, and any name the user gave it. Everything else (name, group, the call) is
+  taken from the latest list each time, never from a stored copy.
+- A stored `(package, id)` that is not in the current list is ABSENT: not shown as the provider's,
+  not run, and its key stays bound so it works again if the link comes back. "Delete" keeps the
+  caller's own meaning (the user's act).
+- When a key is pressed, the caller invokes the call from the latest list for that `id`. If the
+  call needs confirming (§3b), the caller asks first, as for any call.
+- The caller re-reads the list when it shows its links, and when the provider is installed or
+  updated. Nothing is pushed.
+- The caller tells the user which of three things happened when a link does nothing, using the
+  §11b reason: the link is absent from the list; the provider refused it (with its sentence, and
+  whether the user can fix it); the provider did not answer.
+- The caller never edits the provider's list.
+
+### 14c. Who does what
+
+- Library: the element format (parse with the limits, build), unit-tested.
+- 4Home: the user chooses, with a toggle per object and state, which ones are links (owner,
+  2026-10-20). `links.list` lists only those, each the same call `home.object.list` gives for that
+  state. The toggles start off and are kept in 4Home's backup file. Why: the user offers the few
+  links they will bind, not every state of every device, so a caller's Links page is not flooded.
+- 4Zones: reading `links.list` needs a new kind of link row and a firing path through the 4Link
+  client; the 4Zones PM scopes it, later. When 4Zones reads it, 4Zones becomes a 4Link caller and
+  its release certificate joins the family list (§5a), on the owner's word, with the digest taken
+  only from the Play Console's App signing key certificate on the page whose Digital Asset Links
+  JSON names `uk.mr_biz.fourzones`.
+- 4Screenshots: unchanged. Its two links stay fixed in 4Zones (it has no 4Link provider, and its
+  links are addresses, not calls).
