@@ -13,6 +13,7 @@ import java.io.File
  * is what release resolves; only src/debug may add to it.
  */
 class FamilyPinTest {
+    private val fourZones = FourLink.FOURZONES_RELEASE_DIGEST
     private val release = FourLink.FAMILY_RELEASE_DIGEST
     private val fourTasks = FourLink.FOURTASKS_RELEASE_DIGEST
     private val fourHome = FourLink.FOURHOME_RELEASE_DIGEST
@@ -31,11 +32,11 @@ class FamilyPinTest {
         }.toMap()
 
     @Test fun `release trusts the release certificates and nothing else`() {
-        assertEquals(listOf(release, fourTasks, fourHome, fourScreenshots, fourPdfs), digestsIn(defining().getValue("main")))
+        assertEquals(listOf(fourZones, release, fourTasks, fourHome, fourScreenshots, fourPdfs), digestsIn(defining().getValue("main")))
     }
 
     @Test fun `debug adds the workstation debug certificate and keeps the release ones`() {
-        assertEquals(listOf(release, fourTasks, fourHome, fourScreenshots, fourPdfs, debug), digestsIn(defining().getValue("debug")))
+        assertEquals(listOf(fourZones, release, fourTasks, fourHome, fourScreenshots, fourPdfs, debug), digestsIn(defining().getValue("debug")))
     }
 
     @Test fun `only main and debug define the list`() {

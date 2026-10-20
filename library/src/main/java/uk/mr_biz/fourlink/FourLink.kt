@@ -81,6 +81,12 @@ object FourLink {
     /** 4PDFs' own release digest (owner, 2026-10-14). */
     const val FOURPDFS_RELEASE_DIGEST = "52bf661f8b14e2fbf716bb6a432645ca88ce8e2b8ad46360fbacb689c8ed49cc"
 
+    /**
+     * 4Zones' own release digest (owner, 2026-10-20: the family's first app; CN=4Zones,
+     * O=mr-biz apps, C=GB, read from 4Zones 0.10.62 on the owner's S25; its Play app signing key).
+     */
+    const val FOURZONES_RELEASE_DIGEST = "98d58b42c8f6a02c26eb34e6c42981cc2b92ea67d4680b26e884593ab471f19d"
+
     const val RATE_LIMIT_PER_MINUTE = 30
     const val AUDIT_LIMIT = 500
 
