@@ -81,6 +81,9 @@ object FourLink {
     /** 4PDFs' own release digest (owner, 2026-10-14). */
     const val FOURPDFS_RELEASE_DIGEST = "52bf661f8b14e2fbf716bb6a432645ca88ce8e2b8ad46360fbacb689c8ed49cc"
 
+    /** 4StreamDeck's own release digest (owner, 2026-11-06). */
+    const val FOURSTREAMDECK_RELEASE_DIGEST = "5c1c3f9c55247b189adf337b6509a3774488068ccf323cdeea91c680261f7e63"
+
     const val RATE_LIMIT_PER_MINUTE = 30
     const val AUDIT_LIMIT = 500
 
