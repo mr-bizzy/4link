@@ -536,6 +536,7 @@ invent synonyms for one thing:
 | `rate_limited` | Asked too often |
 | `too_large` | The request or its answer is too large |
 | `user_declined` | The user said no |
+| `not_for_model` | Runs only when the user triggered it, and this call's `origin` (§4c) was not `"user"` |
 
 - **A provider's own tokens MUST be prefixed with the provider:**
   `4zones.grant_off`. An unprefixed token MUST be a core token. That is what
