@@ -57,7 +57,8 @@ object SkillPrompt {
         appendLine(BLOCK_OPEN)
         for (s in sources) {
             appendLine("app: ${s.catalogue.app.take(FourLink.TITLE_MAX)} (${if (s.family) "ours" else "third party"})")
-            for (f in s.catalogue.functions) {
+            // §15a: pictures and state are plumbing for control surfaces, never offered to a model.
+            for (f in Plumbing.forModel(s.catalogue).functions) {
                 appendLine("- id: ${f.id} | effect: ${f.effect.wire} | title: ${f.title.take(FourLink.TITLE_MAX)}")
                 appendLine("  description: ${f.description.take(FourLink.DESCRIPTION_MAX).replace('\n', ' ')}")
                 appendLine("  input: ${f.input.toJson()}")
@@ -86,6 +87,7 @@ object SkillPrompt {
         }
         val id = o.optString("function").trim()
         if (id.isEmpty()) return Decision.None("the model did not name a function")
+        Plumbing.refusalForModel(id)?.let { return Decision.None(it) }
         val hits = sources.mapNotNull { s -> s.catalogue.find(id)?.let { s.packageName to it } }
         val (packageName, function) = hits.singleOrNull()
             ?: return Decision.None(

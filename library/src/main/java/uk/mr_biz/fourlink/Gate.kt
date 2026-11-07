@@ -25,6 +25,8 @@ class ProviderGate(
      * (found 2026-10-02 when Stranger, trusting no key, refused itself).
      */
     private val isSelf: (Caller) -> Boolean = { false },
+    /** §15c: `state.get` has its own limit, 120 a minute per caller, apart from the 30. */
+    private val stateRate: RateLimiter = RateLimiter(limit = State.GET_PER_MINUTE, now = now),
 ) {
 
     /** Family, paired (still the same app, still installed) or unknown (§4 `hello`). */
@@ -64,6 +66,13 @@ class ProviderGate(
         val standing = standing(caller)
         val decision = when {
             standing == Standing.UNKNOWN -> Decision.Refused(ErrorCode.NOT_PAIRED, NOT_PAIRED_SENTENCE)
+            // §15c: state is for family only in this version, whatever a paired app's grant says.
+            standing == Standing.PAIRED && functionId.startsWith(STATE_PREFIX) ->
+                Decision.Refused(ErrorCode.NOT_GRANTED, "State is shared only with this developer's own apps.")
+            // §15c: state.get is not counted in the 30; it has its own 120 a minute.
+            functionId == State.GET ->
+                if (stateRate.allow(caller.packageName)) Decision.Allowed
+                else Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
             !rate.allow(caller.packageName) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
             standing == Standing.PAIRED && pairings.get(caller.packageName)?.allows(functionId) != true ->
                 Decision.Refused(ErrorCode.NOT_GRANTED, "This app was not allowed to use that.")
@@ -97,6 +106,7 @@ class ProviderGate(
 
     companion object {
         const val NOT_PAIRED_SENTENCE = "This app is not paired with us. Ask the user to pair it first."
+        private const val STATE_PREFIX = "state."
         const val RATE_LIMITED_SENTENCE = "Too many calls in the last minute. Try again shortly."
     }
 }
