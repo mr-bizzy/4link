@@ -136,6 +136,20 @@ plug that powers a rack or moving a desk (4Home, owner 2026-10-06). A DELETE is
 always confirmed anyway. Readers that don't know the field ignore it, and lose
 nothing they had before.
 
+### 3d. Only for the user (`"origin": "user"`)
+
+A function may carry `"origin": "user"`: it runs only when the user triggered the call (§4c), never
+on a model's choice. It is for functions such as 4Zones' `keys.press`, where a misheard word must
+never act at all, not even with a confirmation.
+
+- A caller that offers functions to a model leaves every such function out, and refuses to invoke
+  one the model names anyway. The library's prompt builder does this for every member, so no
+  caller has to remember a list of ids.
+- The provider enforces it too: the library answers a call to such a function `refused` with
+  reason `not_for_model` (§11b) unless the call's `origin` is `"user"`. So an older caller that
+  sends no `origin`, or one that does not know this field, is refused rather than trusted.
+- Readers that don't know the field ignore it. That is safe because the provider enforces it.
+
 ### 3a. The user's own words (`x-from-speech`)
 
 A string property may carry `"x-from-speech": true`: the caller may fill it
