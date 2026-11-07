@@ -241,44 +241,158 @@ class StateTest {
 
     // ---- the subscriber ----
 
+    /** Runs nothing until told: a read is "in flight" from [run] until [runAll] executes it. */
+    private class FakeExecutor {
+        val queue = ArrayDeque<() -> Unit>()
+        fun run(task: () -> Unit) { queue.addLast(task) }
+        fun runAll() { while (queue.isNotEmpty()) queue.removeFirst()() }
+    }
+
+    private class SubRig(tracked: Set<String> = setOf("p")) {
+        val clock = FixedClock(0)
+        val timer = FakeTimer(clock)
+        val exec = FakeExecutor()
+        val reads = mutableListOf<Pair<Long, List<String>>>()
+        val changes = mutableListOf<Map<String, State.Value>>()
+        var answer: (List<String>) -> Map<String, State.Value>? = { null }
+        val sub = StateSubscriber(
+            tracked = { tracked },
+            read = { _, keys -> reads += clock.now to keys; answer(keys) },
+            run = exec::run,
+            schedule = timer::schedule,
+            onChanged = { _, c -> changes += c },
+        )
+        fun ping(vararg keys: String) { sub.onPing("p", keys.toList()); }
+    }
+
+    private fun v(seq: Long, token: State.Token = State.Token.IDLE) = State.Value(token, null, seq)
+
     @Test fun `a forged ping costs one gated read and shows nothing false`() {
-        var reads = 0
-        val truth = mapOf("4dictate.mic" to State.Value(State.Token.IDLE, null, start + 5))
-        val sub = StateSubscriber({ setOf("uk.mr_biz.fourdictate") }) { _, _ -> reads++; truth }
-        assertEquals(truth, sub.onPing("uk.mr_biz.fourdictate", listOf("4dictate.mic")))
+        val r = SubRig()
+        val truth = mapOf("k.a" to v(5))
+        r.answer = { truth }
+        r.ping("k.a"); r.exec.runAll()
+        assertEquals(listOf(truth), r.changes)
         // Forged: claims a change, but the gated read says what is true, so nothing changes.
-        assertTrue(sub.onPing("uk.mr_biz.fourdictate", listOf("4dictate.mic")).isEmpty())
-        assertEquals(2, reads)
-        assertEquals(truth, sub.held("uk.mr_biz.fourdictate"))
+        r.ping("k.a"); r.exec.runAll()
+        assertEquals(2, r.reads.size)
+        assertEquals(1, r.changes.size)
+        assertEquals(truth, r.sub.held("p"))
     }
 
     @Test fun `a ping naming a provider not tracked, or no key, reads nothing`() {
-        var reads = 0
-        val sub = StateSubscriber({ setOf("uk.mr_biz.fourdictate") }) { _, _ -> reads++; emptyMap() }
-        assertTrue(sub.onPing("com.example.stranger", listOf("4dictate.mic")).isEmpty())
-        assertTrue(sub.onPing(null, listOf("4dictate.mic")).isEmpty())
-        assertTrue(sub.onPing("uk.mr_biz.fourdictate", null).isEmpty())
-        assertTrue(sub.onPing("uk.mr_biz.fourdictate", listOf("<bad key>")).isEmpty())
-        assertEquals(0, reads)
+        val r = SubRig()
+        r.sub.onPing("com.example.stranger", listOf("k.a"))
+        r.sub.onPing(null, listOf("k.a"))
+        r.sub.onPing("p", null)
+        r.sub.onPing("p", listOf("<bad key>"))
+        r.exec.runAll()
+        assertEquals(0, r.reads.size)
     }
 
     @Test fun `a reply older than one held is dropped, a newer one kept`() {
-        val sub = StateSubscriber({ setOf("p") }) { _, _ -> null }
-        val v41 = State.Value(State.Token.LISTENING, null, 41)
-        val v40 = State.Value(State.Token.IDLE, null, 40)
-        val v42 = State.Value(State.Token.IDLE, null, 42)
-        assertEquals(mapOf("k.a" to v41), sub.accept("p", mapOf("k.a" to v41)))
-        assertTrue("older", sub.accept("p", mapOf("k.a" to v40)).isEmpty())
-        assertTrue("the same", sub.accept("p", mapOf("k.a" to v41)).isEmpty())
-        assertEquals(mapOf("k.a" to v42), sub.accept("p", mapOf("k.a" to v42)))
-        assertEquals(mapOf("k.a" to v42), sub.held("p"))
-        sub.forget("p")
-        assertTrue(sub.held("p").isEmpty())
+        val r = SubRig()
+        assertEquals(mapOf("k.a" to v(41)), r.sub.accept("p", mapOf("k.a" to v(41))))
+        assertTrue("older", r.sub.accept("p", mapOf("k.a" to v(40))).isEmpty())
+        assertTrue("the same", r.sub.accept("p", mapOf("k.a" to v(41))).isEmpty())
+        assertEquals(mapOf("k.a" to v(42)), r.sub.accept("p", mapOf("k.a" to v(42))))
+        assertEquals(mapOf("k.a" to v(42)), r.sub.held("p"))
+        r.sub.forget("p")
+        assertTrue(r.sub.held("p").isEmpty())
     }
 
-    @Test fun `a failed read changes nothing`() {
-        val sub = StateSubscriber({ setOf("p") }) { _, _ -> null }
-        assertTrue(sub.onPing("p", listOf("k.a")).isEmpty())
+    @Test fun `a burst of 50 pings costs at most 2 reads and ends on the latest state`() {
+        val r = SubRig()
+        var truth = 1L
+        var first = true
+        r.answer = { _ ->
+            val snapshot = mapOf("k.a" to v(truth))
+            if (first) {
+                first = false
+                // The other 49 pings arrive while the first read is in flight, and the state moves on.
+                repeat(49) { truth++; r.ping("k.a") }
+            }
+            snapshot
+        }
+        r.ping("k.a")
+        r.exec.runAll()
+        assertEquals(2, r.reads.size)
+        assertEquals(mapOf("k.a" to v(50)), r.sub.held("p"))
+        assertEquals(listOf(mapOf("k.a" to v(1)), mapOf("k.a" to v(50))), r.changes)
+    }
+
+    @Test fun `pings during a read are one more read with every key asked for`() {
+        val r = SubRig()
+        r.answer = { keys -> keys.associateWith { v(1) } }
+        r.ping("k.a")
+        r.ping("k.b"); r.ping("k.c"); r.ping("k.b")
+        r.exec.runAll()
+        assertEquals(listOf(listOf("k.a"), listOf("k.b", "k.c")), r.reads.map { it.second })
+    }
+
+    @Test fun `a rate-limited read retries after 1 s, then 2 s, and lands`() {
+        val r = SubRig()
+        var fails = 2
+        r.answer = { if (fails-- > 0) null else mapOf("k.a" to v(7, State.Token.LISTENING)) }
+        r.ping("k.a"); r.exec.runAll()
+        r.timer.advance(999); r.exec.runAll()
+        assertEquals("no retry before 1 s", 1, r.reads.size)
+        r.timer.advance(1); r.exec.runAll()
+        assertEquals(2, r.reads.size)
+        r.timer.advance(1_999); r.exec.runAll()
+        assertEquals(2, r.reads.size)
+        r.timer.advance(1); r.exec.runAll()
+        assertEquals(listOf(0L, 1_000L, 3_000L), r.reads.map { it.first })
+        assertEquals(mapOf("k.a" to v(7, State.Token.LISTENING)), r.sub.held("p"))
+        r.timer.advance(120_000); r.exec.runAll()
+        assertEquals("nothing after it landed", 3, r.reads.size)
+    }
+
+    @Test fun `the backoff doubles to a 30 s cap and never gives up`() {
+        val r = SubRig()
+        r.ping("k.a"); r.exec.runAll()
+        repeat(150) { r.timer.advance(1_000); r.exec.runAll() }
+        val gaps = r.reads.map { it.first }.zipWithNext { x, y -> y - x }
+        assertEquals(listOf(1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 30_000L, 30_000L), gaps.take(7))
+        assertTrue(r.timer.tasks.isNotEmpty())
+    }
+
+    @Test fun `a ping during a backoff supersedes it, reads at once with both sets of keys`() {
+        val r = SubRig()
+        var fail = true
+        r.answer = { keys -> if (fail) null else keys.associateWith { v(3) } }
+        r.ping("k.a"); r.exec.runAll()          // fails, retry waits 1 s
+        r.timer.advance(1_000); r.exec.runAll() // fails again, retry waits 2 s
+        fail = false
+        r.timer.advance(500)
+        r.ping("k.b"); r.exec.runAll()          // supersedes the wait
+        assertEquals(listOf(listOf("k.a"), listOf("k.a"), listOf("k.a", "k.b")), r.reads.map { it.second })
+        assertEquals(1_500L, r.reads.last().first)
+        r.timer.advance(10_000); r.exec.runAll()
+        assertEquals("the superseded retry does nothing", 3, r.reads.size)
+        assertEquals(setOf("k.a", "k.b"), r.sub.held("p").keys)
+    }
+
+    @Test fun `a successful read resets the backoff`() {
+        val r = SubRig()
+        var fail = true
+        r.answer = { if (fail) null else mapOf("k.a" to v(r.reads.size.toLong())) }
+        r.ping("k.a"); r.exec.runAll()
+        r.timer.advance(1_000); r.exec.runAll()
+        fail = false
+        r.timer.advance(2_000); r.exec.runAll()
+        fail = true
+        r.ping("k.a"); r.exec.runAll()
+        r.timer.advance(1_000); r.exec.runAll()
+        assertEquals("1 s again, not 4 s", 5, r.reads.size)
+    }
+
+    @Test fun `forgetting a provider voids its waiting retry`() {
+        val r = SubRig()
+        r.ping("k.a"); r.exec.runAll()
+        r.sub.forget("p")
+        r.timer.advance(60_000); r.exec.runAll()
+        assertEquals(1, r.reads.size)
     }
 
     // ---- the gate ----

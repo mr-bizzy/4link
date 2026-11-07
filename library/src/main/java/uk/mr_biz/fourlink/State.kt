@@ -324,32 +324,116 @@ class StateProvider(val store: StateStore, val subscriptions: Subscriptions) {
 }
 
 /**
- * The subscriber's side (§15c): a ping only says "ask me". [onPing] reads the ping's extras; for a
- * provider it tracks it calls [read] (a gated `state.get`), and [accept] keeps only states newer than
- * the ones it holds, so a forged ping costs one read and shows nothing false, and a late reply never
- * undoes a newer one.
+ * The subscriber's side (§15c): a ping only says "ask me". For a provider it tracks, [onPing] starts a
+ * gated `state.get` ([read]) and [accept] keeps only states newer than the ones it holds, so a forged
+ * ping costs one read and shows nothing false, and a late reply never undoes a newer one.
+ *
+ * The ping may come 10 times a second per key, `state.get` allows 120 a minute, so (ruling, 2026-11-07):
+ * - At most ONE read in flight per provider. A ping during a read marks the provider dirty; when the
+ *   read ends, one more read follows with every key asked for meanwhile. A flicker of N pings costs at
+ *   most 2 reads, and the last read always reflects the latest state.
+ * - A read that fails (rate limited, or anything else: [read] gives null) is retried after 1 s, then
+ *   2 s, 4 s, capped at 30 s, until one succeeds or a new ping supersedes the wait (it reads at once,
+ *   with the keys of both). The light never stays wrong without a retry pending.
+ *
+ * [run] runs a read off the main thread (an executor); [schedule] runs a task after a delay. Both are
+ * injected so the tests drive them on a fake clock. [onChanged] hears the states that changed.
  */
 class StateSubscriber(
     /** The providers this subscriber watches; a ping naming any other is ignored. */
     private val tracked: () -> Set<String>,
-    /** A gated `state.get` on that provider for those keys, parsed; null when it failed. */
+    /** A gated `state.get` on that provider for those keys, parsed; null when it failed. Blocking. */
     private val read: (provider: String, keys: List<String>) -> Map<String, State.Value>?,
+    private val run: (task: () -> Unit) -> Unit,
+    private val schedule: (delayMs: Long, task: () -> Unit) -> Unit,
+    private val onChanged: (provider: String, states: Map<String, State.Value>) -> Unit = { _, _ -> },
 ) {
     private val held = hashMapOf<Pair<String, String>, State.Value>()
+
+    /** One provider's reading: a read in flight, keys asked for meanwhile, a retry waiting. */
+    private class Reading {
+        var inFlight = false
+        val dirty = linkedSetOf<String>()
+        /** Keys a waiting retry will read, and which wait is current (an older one is void). */
+        val retryKeys = linkedSetOf<String>()
+        var retryGeneration = 0
+        var retryWaiting = false
+        var backoffMs = 0L
+    }
+
+    private val readings = hashMapOf<String, Reading>()
 
     /** What this subscriber holds for [provider]. */
     @Synchronized fun held(provider: String): Map<String, State.Value> =
         held.filterKeys { it.first == provider }.mapKeys { it.key.second }
 
-    /**
-     * A ping arrived. Returns the states that changed for the surface to redraw (empty when the ping
-     * was ignored, the read failed or nothing was newer).
-     */
-    fun onPing(provider: String?, keys: List<String>?): Map<String, State.Value> {
-        if (provider == null || provider !in tracked()) return emptyMap()
+    /** A ping arrived. Returns at once; the read, if any, runs through [run]. */
+    fun onPing(provider: String?, keys: List<String>?) {
+        if (provider == null || provider !in tracked()) return
         val wanted = keys.orEmpty().filter(State::isName)
-        if (wanted.isEmpty()) return emptyMap()
-        return accept(provider, read(provider, wanted) ?: return emptyMap())
+        if (wanted.isEmpty()) return
+        val start: List<String>
+        synchronized(this) {
+            val r = readings.getOrPut(provider) { Reading() }
+            if (r.inFlight) { r.dirty += wanted; return }
+            // A ping during a backoff supersedes the wait: read now, with the keys of both.
+            val all = LinkedHashSet<String>(r.retryKeys).apply { addAll(wanted) }
+            r.retryKeys.clear()
+            r.retryWaiting = false
+            r.retryGeneration++
+            r.inFlight = true
+            start = all.toList()
+        }
+        startRead(provider, start)
+    }
+
+    private fun startRead(provider: String, keys: List<String>) {
+        run {
+            val result = runCatching { read(provider, keys) }.getOrNull()
+            finished(provider, keys, result)
+        }
+    }
+
+    private fun finished(provider: String, keys: List<String>, result: Map<String, State.Value>?) {
+        val changed = if (result != null) accept(provider, result) else emptyMap()
+        var next: List<String>? = null
+        var retry: Pair<Long, Int>? = null
+        synchronized(this) {
+            val r = readings.getOrPut(provider) { Reading() }
+            if (result == null) {
+                r.backoffMs = if (r.backoffMs == 0L) FIRST_RETRY_MS else minOf(r.backoffMs * 2, MAX_RETRY_MS)
+                r.retryKeys.clear(); r.retryKeys += keys; r.retryKeys += r.dirty
+                r.dirty.clear()
+                r.inFlight = false
+                r.retryWaiting = true
+                retry = r.backoffMs to ++r.retryGeneration
+            } else {
+                r.backoffMs = 0
+                if (r.dirty.isNotEmpty()) {
+                    next = r.dirty.toList()
+                    r.dirty.clear()
+                } else {
+                    r.inFlight = false
+                }
+            }
+        }
+        if (changed.isNotEmpty()) onChanged(provider, changed)
+        next?.let { startRead(provider, it) }
+        retry?.let { (delay, generation) -> schedule(delay) { retryFired(provider, generation) } }
+    }
+
+    private fun retryFired(provider: String, generation: Int) {
+        val keys: List<String>
+        synchronized(this) {
+            val r = readings[provider] ?: return
+            // Superseded by a ping (or forgotten): nothing to do.
+            if (!r.retryWaiting || r.retryGeneration != generation || r.inFlight) return
+            r.retryWaiting = false
+            r.inFlight = true
+            keys = r.retryKeys.toList()
+            r.retryKeys.clear()
+        }
+        startRead(provider, keys)
     }
 
     /** Keeps each state only when its seq is newer than the one held; returns what changed. */
@@ -364,6 +448,14 @@ class StateSubscriber(
         return changed
     }
 
-    /** Forgets [provider] (its subscription ended or it was removed). */
-    @Synchronized fun forget(provider: String) { held.keys.removeAll { it.first == provider } }
+    /** Forgets [provider] (its subscription ended or it was removed); a waiting retry is void. */
+    @Synchronized fun forget(provider: String) {
+        held.keys.removeAll { it.first == provider }
+        readings.remove(provider)
+    }
+
+    companion object {
+        const val FIRST_RETRY_MS = 1_000L
+        const val MAX_RETRY_MS = 30_000L
+    }
 }

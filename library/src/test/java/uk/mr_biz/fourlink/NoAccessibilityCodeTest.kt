@@ -47,5 +47,7 @@ class NoAccessibilityCodeTest {
         val state = sources.single { it.name == "FourLinkState.kt" }.readText()
         assertTrue(state.contains("Intent(State.ACTION_STATE).setPackage(subscriber)"))
         assertEquals(1, Regex("sendBroadcast\\(").findAll(state).count())
+        // The ping comes from another app: a context-registered receiver must be exported.
+        assertTrue(state.contains("Context.RECEIVER_EXPORTED"))
     }
 }

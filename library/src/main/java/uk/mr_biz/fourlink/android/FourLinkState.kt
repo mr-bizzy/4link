@@ -4,6 +4,7 @@ package uk.mr_biz.fourlink.android
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -16,6 +17,7 @@ import uk.mr_biz.fourlink.StateProvider
 import uk.mr_biz.fourlink.StateStore
 import uk.mr_biz.fourlink.StateSubscriber
 import org.json.JSONObject
+import java.util.concurrent.Executors
 
 /**
  * A provider's state (§15c) on Android: one [StateStore] per process, whose changes ping the
@@ -58,34 +60,49 @@ class FourLinkState private constructor(context: Context, namespace: String) {
 }
 
 /**
- * The subscriber's side (§15c): register this (context-registered, or in the manifest) for
- * [State.ACTION_STATE]. A ping only says "ask me": [subscriber] calls a gated `state.get` on the
- * provider it names (only one it tracks), and keeps only states newer than it holds; [onChanged]
- * hears what changed. The read goes off the main thread, as every 4Link call must.
+ * The subscriber's side (§15c): a receiver for [State.ACTION_STATE] that hands each ping to a
+ * [StateSubscriber], which reads the provider's state through a gated `state.get` (at most one read
+ * in flight per provider, failed reads retried with backoff) and calls its `onChanged`.
+ *
+ * **The sender is another app, so a context-registered receiver must be registered with
+ * `Context.RECEIVER_EXPORTED`**, or Android 14+ never delivers the ping. [register] does that. A
+ * receiver declared in the manifest needs `android:exported="true"`.
  *
  * Since Android 14 a frozen app's context-registered receivers get broadcasts only when it thaws, so a
  * surface that needs live state keeps a foreground service while it is shown (§15c).
  */
-open class StatePingReceiver(
-    private val subscriber: StateSubscriber,
-    private val onChanged: (provider: String, states: Map<String, State.Value>) -> Unit,
-) : BroadcastReceiver() {
+open class StatePingReceiver(private val subscriber: StateSubscriber) : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != State.ACTION_STATE) return
-        val provider = intent.getStringExtra(State.EXTRA_PACKAGE)
-        val keys = intent.getStringArrayExtra(State.EXTRA_KEYS)?.toList()
-        val pending = goAsync()
-        Thread {
-            try {
-                val changed = subscriber.onPing(provider, keys)
-                if (changed.isNotEmpty() && provider != null) onChanged(provider, changed)
-            } finally {
-                pending.finish()
-            }
-        }.start()
+        // Returns at once: the read runs on the subscriber's executor.
+        subscriber.onPing(intent.getStringExtra(State.EXTRA_PACKAGE), intent.getStringArrayExtra(State.EXTRA_KEYS)?.toList())
+    }
+
+    /** Registers this receiver EXPORTED (the ping comes from another app). Unregister it when the surface goes. */
+    fun register(context: Context) {
+        context.registerReceiver(this, IntentFilter(State.ACTION_STATE), Context.RECEIVER_EXPORTED)
     }
 
     companion object {
+        private val main = Handler(Looper.getMainLooper())
+        private val reads = Executors.newSingleThreadExecutor()
+
+        /**
+         * A [StateSubscriber] wired for Android: reads through [client] on one background thread, retries
+         * timed on the main looper and run on that thread, [onChanged] called on that thread.
+         */
+        fun subscriber(
+            client: FourLinkClient,
+            tracked: () -> Set<String>,
+            onChanged: (provider: String, states: Map<String, State.Value>) -> Unit,
+        ): StateSubscriber = StateSubscriber(
+            tracked = tracked,
+            read = reader(client),
+            run = { task -> reads.execute(task) },
+            schedule = { delay, task -> main.postDelayed({ reads.execute(task) }, delay) },
+            onChanged = onChanged,
+        )
+
         /** A [StateSubscriber]'s read through [client]: a gated `state.get`, parsed, or null on any failure. */
         fun reader(client: FourLinkClient): (String, List<String>) -> Map<String, State.Value>? = { provider, keys ->
             when (val r = client.invoke(provider, State.GET_SPEC, JSONObject().put(State.KEY_KEYS, State.keysToText(keys)).toString())) {
@@ -95,4 +112,3 @@ open class StatePingReceiver(
         }
     }
 }
-
