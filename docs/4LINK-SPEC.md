@@ -772,8 +772,17 @@ not how much.
   argument and runs the call as any link. A link without `level` is a key, not a slider.
 - A link may name `state`: the provider's state key that shows it (`"state":
   "4home.light.desk_lamp"`), so the caller knows which state lights or positions that control.
-- A slider sends at most one call per 250 ms while it moves, and always its final value. The
-  caller counts these in the 30 a minute (§6) like any invoke.
+- A slider sends at most one call per 250 ms while it moves. It MUST send the final value when
+  the gesture ends, even if that falls inside the 250 ms; the final value is the one that has to
+  land.
+- What the state reports is authoritative. While the user's gesture is live, the caller shows the
+  user's value and ignores the state's `level`; when the gesture ends, it shows the state's again,
+  so a slow bulb never fights the finger and the control ends showing what the thing really is.
+- A link may carry `short`: a key-cap label, at most 16 characters ("Kitchen"), for a surface
+  with no room for `name`. Without it, the caller shortens `name` itself.
+- Rate: these calls count like any invoke (§6). Proposed, for the owner's word: family callers
+  get 120 a minute instead of 30, because a 2 s sweep is about 9 calls and a dial that stutters
+  is worse than none. Paired callers stay at 30.
 
 ### 15d. Measured before sign-off
 
