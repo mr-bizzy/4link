@@ -756,6 +756,25 @@ subscriber gets one broadcast naming only its own keys. The provider does not wa
   the owner's S25), so a frozen surface shows the light late. This is the subscriber's job. The
   provider does not change for it.
 
+### 15f. Levels: sliders and dials
+
+Why: the owner plans sliders and dials on 4StreamDeck for things with a level, such as a light's
+brightness, a desk's height or a blind's position (2026-11-07). A token says what to notice,
+not how much.
+
+- A state may carry `level`: a number from 0 to 100, beside its token (a light at 40 %:
+  `{ "token": "idle", "level": 40, "seq": 7 }`; on and off stay in the token, see below). A reader drops
+  a `level` outside 0 to 100 and keeps the token.
+- On and off: a state may carry `on`, a boolean, so a toggle key shows its state. A light that
+  is on and needs nothing is `{ "token": "idle", "on": true, "level": 40 }`.
+- A link (§14a) may name `level`: the one number argument of its call that a slider or dial
+  fills, 0 to 100 (`"level": "brightness_percent"`). The caller puts the user's value into that
+  argument and runs the call as any link. A link without `level` is a key, not a slider.
+- A link may name `state`: the provider's state key that shows it (`"state":
+  "4home.light.desk_lamp"`), so the caller knows which state lights or positions that control.
+- A slider sends at most one call per 250 ms while it moves, and always its final value. The
+  caller counts these in the 30 a minute (§6) like any invoke.
+
 ### 15d. Measured before sign-off
 
 The time from a provider's state change to the subscriber holding the new token, on the owner's
