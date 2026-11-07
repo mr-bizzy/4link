@@ -843,6 +843,10 @@ answer stays where it is.
   gives the answer (`{ "token": "idle", "seq": 9, "read": "focus.read" }`). On a ping for that key,
   the subscriber calls that function, an ordinary gated, counted invoke under that function's
   own rules. A reader drops a `read` that is not a function id.
+- Naming a function in `read` grants nothing. The subscriber calls it as ITSELF: its own caller
+  identity, family standing or pairing grant, its own rate limit, and its own honest `origin`
+  (§4c; a trigger's read is not the user's act, so `"model"`). The provider gates that call exactly
+  as if the subscriber had chosen it unprompted. A trigger is never a capability.
 - A trigger never carries the answer itself: no package, display or text in the state. The answer
   goes only through the function, so its access rules apply every time.
 - Coalescing (100 ms, §15c) applies, so a burst of focus changes costs one read of the latest.
