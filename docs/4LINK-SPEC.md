@@ -642,7 +642,10 @@ The reader enforces the limits (§3): an element over a limit, ill-formed, or wi
   only from the Play Console's App signing key certificate on the page whose Digital Asset Links
   JSON names `uk.mr_biz.fourzones`.
 - 4Screenshots: unchanged. Its two links stay fixed in 4Zones (it has no 4Link provider, and its
-  links are addresses, not calls).
+  links are addresses, not calls), and 4StreamDeck reaches them through 4Zones' links. It may
+  become a provider later (`links.list`, `icons.get`, and the state in §15e), in one release,
+  when the 4Zones PM schedules it. A deck's Screenshot key is 4Screenshots', not 4Dictate's
+  (owner, 2026-11-07).
 
 ## 15. Pictures and state (for control surfaces)
 
@@ -802,5 +805,8 @@ numbers go in this section before §15c ships.
   As a caller, it applies §15a. The 4Dictate PM's.
 - 4Zones: provides `icons.get` for its fixed actions and `4zones.access` (`attention` when its
   window access is down). The 4Zones PM's.
+- 4Screenshots: may provide `4screenshots.capture` (`working` while a capture is in flight,
+  `attention` when refused, `idle` otherwise) in the release that makes it a provider. The 4Zones
+  PM's.
 - 4StreamDeck: the caller, with pictures, user overrides, subscriptions and the foreground
   service. The 4Zones PM's.
