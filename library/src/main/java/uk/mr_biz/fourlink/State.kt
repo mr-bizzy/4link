@@ -33,7 +33,7 @@ object State {
     /** At most one ping per key in this long, carrying the latest (§15c). */
     const val PING_GAP_MS = 100L
 
-    /** `get` allows this many a minute per caller, apart from the 30 (§15c). */
+    /** `get` allows this many a minute per caller, apart from the caller's 30 or 120 (§6, §15c). */
     const val GET_PER_MINUTE = 120
 
     enum class Token(val wire: String) {

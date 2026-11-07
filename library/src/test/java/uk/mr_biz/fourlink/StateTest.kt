@@ -417,19 +417,19 @@ class StateTest {
         assertEquals(ErrorCode.NOT_PAIRED, (gate.gateInvoke(caller(10002), State.GET) as Decision.Refused).code)
     }
 
-    @Test fun `state get has its own 120 a minute and does not use up the 30`() {
+    @Test fun `state get has its own 120 a minute and does not use up the family's 120`() {
         val c = caller(10001)
         repeat(120) { assertEquals(Decision.Allowed, gate.gateInvoke(c, State.GET)) }
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, State.GET) as Decision.Refused).code)
-        repeat(30) { assertEquals("the 30 are untouched", Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
+        repeat(120) { assertEquals("the family's 120 are untouched", Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say") as Decision.Refused).code)
         clock.now += 60_000
         assertEquals(Decision.Allowed, gate.gateInvoke(c, State.GET))
     }
 
-    @Test fun `using up the 30 leaves state get alone, and subscribe counts in the 30`() {
+    @Test fun `using up the family's 120 leaves state get alone, and subscribe counts in the 120`() {
         val c = caller(10001)
-        repeat(29) { gate.gateInvoke(c, "echo.say") }
+        repeat(119) { gate.gateInvoke(c, "echo.say") }
         assertEquals(Decision.Allowed, gate.gateInvoke(c, State.SUBSCRIBE))
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, State.SUBSCRIBE) as Decision.Refused).code)
         assertEquals(Decision.Allowed, gate.gateInvoke(c, State.GET))

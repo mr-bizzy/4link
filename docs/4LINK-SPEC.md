@@ -347,9 +347,10 @@ play/PLAY_CONSOLE.md.)
   that asks first. Uninstalling the caller removes its pairing (the provider
   listens for the package's removal and also drops a pairing whose package is
   no longer installed when it next checks).
-- Limits: a per-app rate limit of 30 calls a minute across `catalogue` and
-  `invoke` (`hello` is not counted: it is a constant reply), answered
-  `rate_limited` (`state.get` has its own limit, §15c); and an audit log of every call (section 9).
+- Limits: a per-app rate limit across `catalogue` and `invoke` of 30 calls a minute for a paired
+  app and 120 for a family app (owner, 2026-11-07; §15f) (`hello` is not counted: it is a constant
+  reply), answered `rate_limited` (`state.get` has its own limit, §15c); and an audit log of every
+  call (section 9).
 
 ## 7. The other direction: a family caller using a non-family provider
 
@@ -416,7 +417,7 @@ that form.
 | `bad_arguments` | Arguments fail the input schema (the sentence names the field) |
 | `not_paired` | Caller is neither family nor paired (or its pairing was voided) |
 | `not_granted` | Paired, but this function is outside the grant |
-| `rate_limited` | Over 30 calls in the last minute |
+| `rate_limited` | Over the caller's limit in the last minute: 30 for a paired app, 120 for family |
 | `refused` | The provider declined for its own reason (a switch off, no session) |
 | `failed` | The function ran and failed; the sentence says why |
 
@@ -735,7 +736,7 @@ subscribed package (`Intent.setPackage`), action `uk.mr_biz.4link.action.STATE`,
 It sends at most one ping per key every 100 ms: the first change goes at once, and changes inside
 the window send one ping at its end with every key still pending and the highest `seq`. Each
 subscriber gets one broadcast naming only its own keys. The provider does not wait for delivery.
-`state.subscribe` counts in the 30 a minute; only `state.get` is outside it.
+`state.subscribe` counts in the caller's limit (§6); only `state.get` is outside it.
 
 - The ping carries no token. A broadcast's sender cannot be proven, so a ping only says "ask
   me". The subscriber then calls `state.get`, which is gated like any call (§5, §5a). A forged
@@ -751,7 +752,7 @@ subscriber gets one broadcast naming only its own keys. The provider does not wa
   tried again after 1 s, doubling to at most 30 s, until one succeeds or a new ping supersedes it,
   so a light is never left wrong without a read pending. Its receiver is registered exported
   (`RECEIVER_EXPORTED`), since the ping comes from another app.
-- `state.get` is not counted in the 30 a minute (§6). It has its own limit of 120 a minute per
+- `state.get` is not counted in the caller's limit (§6). It has its own limit of 120 a minute per
   caller, so a busy mic light never uses up a surface's key presses.
 - A subscriber that needs live state keeps itself running (a foreground service) while its
   surface is shown. Since Android 14 a frozen app's context-registered receivers get broadcasts
@@ -783,9 +784,9 @@ not how much.
   so a slow bulb never fights the finger and the control ends showing what the thing really is.
 - A link may carry `short`: a key-cap label, at most 16 characters ("Kitchen"), for a surface
   with no room for `name`. Without it, the caller shortens `name` itself.
-- Rate: these calls count like any invoke (§6). Proposed, for the owner's word: family callers
-  get 120 a minute instead of 30, because a 2 s sweep is about 9 calls and a dial that stutters
-  is worse than none. Paired callers stay at 30.
+- Rate: these calls count like any invoke (§6). Family callers get 120 a minute; paired callers
+  stay at 30 (owner, 2026-11-07), because a 2 s sweep is about 9 calls and a dial that stutters
+  is worse than none.
 
 ### 15d. Measured before sign-off
 

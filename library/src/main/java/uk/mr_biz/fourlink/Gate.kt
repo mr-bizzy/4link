@@ -25,9 +25,16 @@ class ProviderGate(
      * (found 2026-10-02 when Stranger, trusting no key, refused itself).
      */
     private val isSelf: (Caller) -> Boolean = { false },
-    /** §15c: `state.get` has its own limit, 120 a minute per caller, apart from the 30. */
+    /** §15c: `state.get` has its own limit, 120 a minute per caller, apart from the 30 or 120. */
     private val stateRate: RateLimiter = RateLimiter(limit = State.GET_PER_MINUTE, now = now),
+    /** §6: a family caller's limit across `catalogue` and `invoke`, 120 a minute (owner, 2026-11-07); [rate] is the paired 30. */
+    private val familyRate: RateLimiter = RateLimiter(limit = FourLink.RATE_LIMIT_FAMILY_PER_MINUTE, now = now),
 ) {
+
+    /** Counts one call against the caller's own limit: 120 for family, 30 for a paired app. */
+    private fun allow(caller: Caller, standing: Standing): Boolean =
+        if (standing == Standing.FAMILY) familyRate.allow(caller.packageName) else rate.allow(caller.packageName)
+
 
     /** Family, paired (still the same app, still installed) or unknown (§4 `hello`). */
     fun standing(caller: Caller): Standing = when {
@@ -50,7 +57,7 @@ class ProviderGate(
         val standing = standing(caller)
         val decision = when {
             standing == Standing.UNKNOWN -> Decision.Refused(ErrorCode.NOT_PAIRED, NOT_PAIRED_SENTENCE)
-            !rate.allow(caller.packageName) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
+            !allow(caller, standing) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
             else -> Decision.Allowed
         }
         audit.record(AuditEntry(now(), caller.packageName, FourLink.METHOD_CATALOGUE, resultOf(decision)))
@@ -69,11 +76,11 @@ class ProviderGate(
             // §15c: state is for family only in this version, whatever a paired app's grant says.
             standing == Standing.PAIRED && functionId.startsWith(STATE_PREFIX) ->
                 Decision.Refused(ErrorCode.NOT_GRANTED, "State is shared only with this developer's own apps.")
-            // §15c: state.get is not counted in the 30; it has its own 120 a minute.
+            // §15c: state.get is not counted in the 30 or 120; it has its own 120 a minute.
             functionId == State.GET ->
                 if (stateRate.allow(caller.packageName)) Decision.Allowed
                 else Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
-            !rate.allow(caller.packageName) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
+            !allow(caller, standing) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
             standing == Standing.PAIRED && pairings.get(caller.packageName)?.allows(functionId) != true ->
                 Decision.Refused(ErrorCode.NOT_GRANTED, "This app was not allowed to use that.")
             else -> Decision.Allowed

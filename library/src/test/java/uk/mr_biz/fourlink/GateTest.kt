@@ -97,21 +97,48 @@ class GateTest {
         assertNull(pairings.get(c.packageName))
     }
 
-    @Test fun `thirty calls a minute, then rate_limited, then the window slides`() {
-        val c = caller(10001)
-        repeat(30) { assertEquals(Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
+    @Test fun `a paired app gets thirty calls a minute, then rate_limited, then the window slides`() {
+        pairings.put(Pairing("com.example.stranger", OTHER_DIGEST, setOf("echo.say"), clock.now))
+        val c = caller(10002)
+        repeat(29) { assertEquals(Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
+        assertEquals("catalogue counts too", Decision.Allowed, gate.gateCatalogue(c))
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say") as Decision.Refused).code)
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateCatalogue(c) as Decision.Refused).code)
         clock.now += 60_000
         assertEquals(Decision.Allowed, gate.gateInvoke(c, "echo.say"))
     }
 
-    @Test fun `the limit is per app`() {
+    @Test fun `a family app gets 120 a minute across catalogue and invoke, the 121st is refused`() {
+        assertEquals(120, FourLink.RATE_LIMIT_FAMILY_PER_MINUTE)
+        assertEquals(30, FourLink.RATE_LIMIT_PER_MINUTE)
+        val c = caller(10001)
+        repeat(119) { assertEquals("call ${it + 1}", Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
+        assertEquals(Decision.Allowed, gate.gateCatalogue(c))
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say") as Decision.Refused).code)
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateCatalogue(c) as Decision.Refused).code)
+        clock.now += 60_000
+        assertEquals(Decision.Allowed, gate.gateInvoke(c, "echo.say"))
+    }
+
+    @Test fun `the limit is per app, and family and paired counts are independent`() {
         val a = caller(10001)
         pairings.put(Pairing("com.example.stranger", OTHER_DIGEST, setOf("echo.say"), clock.now))
         val b = caller(10002)
-        repeat(30) { gate.gateInvoke(a, "echo.say") }
+        repeat(120) { gate.gateInvoke(a, "echo.say") }
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(a, "echo.say") as Decision.Refused).code)
+        repeat(30) { assertEquals("the paired app's 30 are its own", Decision.Allowed, gate.gateInvoke(b, "echo.say")) }
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(b, "echo.say") as Decision.Refused).code)
+        clock.now += 60_000
         assertEquals(Decision.Allowed, gate.gateInvoke(b, "echo.say"))
+        repeat(29) { gate.gateInvoke(b, "echo.say") }
+        assertEquals("the paired app's 30 used up leaves the family's 120 alone", Decision.Allowed, gate.gateInvoke(a, "echo.say"))
+    }
+
+    @Test fun `state get is unaffected by either limit`() {
+        val a = caller(10001)
+        repeat(120) { gate.gateInvoke(a, "echo.say") }
+        repeat(120) { assertEquals(Decision.Allowed, gate.gateInvoke(a, State.GET)) }
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(a, State.GET) as Decision.Refused).code)
     }
 
     @Test fun `every catalogue call and every refusal is logged, without arguments`() {
