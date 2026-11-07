@@ -644,8 +644,8 @@ The reader enforces the limits (§3): an element over a limit, ill-formed, or wi
 - 4Screenshots: unchanged. Its two links stay fixed in 4Zones (it has no 4Link provider, and its
   links are addresses, not calls), and 4StreamDeck reaches them through 4Zones' links. It may
   become a provider later (`links.list`, `icons.get`, and the state in §15e), in one release,
-  when the 4Zones PM schedules it. A deck's Screenshot key is 4Screenshots', not 4Dictate's
-  (owner, 2026-11-07).
+  when the 4Zones PM schedules it. 4Dictate's own screenshot action stays on offer beside
+  4Screenshots' two (owner, 2026-11-07: "do not drop screenshot").
 
 ## 15. Pictures and state (for control surfaces)
 
