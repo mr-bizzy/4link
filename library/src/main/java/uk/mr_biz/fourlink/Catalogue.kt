@@ -120,6 +120,12 @@ data class FunctionSpec(
      * Wire: "reasons": ["4zones.grant_off", …].
      */
     val reasons: List<String> = emptyList(),
+    /**
+     * §3d — runs only when the user triggered the call (§4c), never on a model's choice: never
+     * offered to a model ([Plumbing]), and refused by [ProviderCore] unless the call's origin is
+     * user. Wire: "origin":"user"; any other value is ignored.
+     */
+    val userOnly: Boolean = false,
 ) {
     /** The major of [version]; 0 when it cannot be read. */
     val major: Int get() = version.substringBefore('.').toIntOrNull() ?: 0
@@ -135,6 +141,7 @@ data class FunctionSpec(
         if (confirmAlways) put("confirm", "always")
         if (frame) put("frame", true)
         if (reasons.isNotEmpty()) put("reasons", org.json.JSONArray(reasons))
+        if (userOnly) put("origin", FourLink.ORIGIN_USER)
     }
 
     companion object {
@@ -166,6 +173,7 @@ data class FunctionSpec(
                 reasons = o.optJSONArray("reasons")?.let { a ->
                     (0 until a.length()).mapNotNull { a.optString(it).takeIf(FourLink::isReason) }
                 }.orEmpty(),
+                userOnly = o.opt("origin") == FourLink.ORIGIN_USER,
             )
         }
     }

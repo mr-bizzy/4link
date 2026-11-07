@@ -82,6 +82,10 @@ class ProviderCore(
         val arguments = JSONObject(argumentsJson ?: "{}")
         // §4c: missing, unknown, or from anyone but family, it is a model's choice.
         val withOrigin = caller.copy(origin = Origin.read(originWire, gate.standing(caller)))
+        // §3d: a user-only function is refused unless the user triggered the call, here, so no provider can forget.
+        if (function.userOnly) Origin.refuseUnlessUser(withOrigin)?.let { r ->
+            return refuse(caller, id, ErrorCode.REFUSED, r.message, reason = r.reason, fixable = r.fixable)
+        }
         val outcome = runCatching { perform(function, arguments, withOrigin) }
             .getOrElse { Outcome.Failed(it.message ?: "it failed") }
         return when (outcome) {

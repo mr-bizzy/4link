@@ -94,6 +94,8 @@ object SkillPrompt {
                 if (hits.isEmpty()) "the model named “$id”, which no approved app offers"
                 else "“$id” is offered by more than one app",
             )
+        // §3d: a user-only function is never the model's to call, even when a source still lists it.
+        Plumbing.refusalForModel(function)?.let { return Decision.None(it) }
         // The user's own words go in where the model left a placeholder (§3a),
         // BEFORE validation, so their length is checked like any text.
         val arguments = Said.fill(function.input, o.optJSONObject("arguments") ?: JSONObject(), said)
