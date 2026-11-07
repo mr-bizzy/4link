@@ -742,6 +742,12 @@ subscriber gets one broadcast naming only its own keys. The provider does not wa
 - Family callers only, in this version. A paired caller is answered `not_granted` for
   `state.get` and `state.subscribe`, whatever its grant. A user's activity going to another
   developer's app is data under P4 and needs its privacy line first.
+- A subscriber keeps at most one `state.get` in flight per provider. A ping that arrives during a
+  read is answered by one more read when it ends, so a flickering key costs at most two reads per
+  burst and the last read is the latest. A read that fails (`rate_limited` or anything else) is
+  tried again after 1 s, doubling to at most 30 s, until one succeeds or a new ping supersedes it,
+  so a light is never left wrong without a read pending. Its receiver is registered exported
+  (`RECEIVER_EXPORTED`), since the ping comes from another app.
 - `state.get` is not counted in the 30 a minute (§6). It has its own limit of 120 a minute per
   caller, so a busy mic light never uses up a surface's key presses.
 - A subscriber that needs live state keeps itself running (a foreground service) while its
