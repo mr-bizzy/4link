@@ -841,7 +841,8 @@ answer stays where it is.
   `touch(key)`. `set` with an unchanged value still does not ping.
 - Its state may carry `read`: the id of a `read` function in the provider's own catalogue that
   gives the answer (`{ "token": "idle", "seq": 9, "read": "focus.read" }`). On a ping for that key,
-  the subscriber calls that function, an ordinary gated, counted invoke under that function's
+  the subscriber calls that function with no arguments (`{}`), so a `read` names only a function
+  with no required input; it is an ordinary gated, counted invoke under that function's
   own rules. A reader drops a `read` that is not a function id.
 - Naming a function in `read` grants nothing. The subscriber calls it as ITSELF: its own caller
   identity, family standing or pairing grant, its own rate limit, and its own honest `origin`
