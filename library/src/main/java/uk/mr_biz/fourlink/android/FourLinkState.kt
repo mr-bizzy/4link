@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
+import uk.mr_biz.fourlink.FunctionSpec
 import uk.mr_biz.fourlink.InvokeResult
 import uk.mr_biz.fourlink.Origin
 import uk.mr_biz.fourlink.Pinger
@@ -103,6 +104,15 @@ open class StatePingReceiver(private val subscriber: StateSubscriber) : Broadcas
             schedule = { delay, task -> main.postDelayed({ reads.execute(task) }, delay) },
             onChanged = onChanged,
         )
+
+        /**
+         * §15g: a trigger's answer. [function] is the provider's `read` function its state named
+         * ([State.triggerReads] resolves it in the catalogue); this is an ordinary gated, counted invoke
+         * under that function's own rules, declared [Origin.MODEL] as the state reader's is. Call it off
+         * the main thread, from `onChanged`.
+         */
+        fun triggerRead(client: FourLinkClient, provider: String, function: FunctionSpec, argumentsJson: String = "{}"): InvokeResult =
+            client.invoke(provider, function, argumentsJson, Origin.MODEL)
 
         /** A [StateSubscriber]'s read through [client]: a gated `state.get`, parsed, or null on any failure. */
         fun reader(client: FourLinkClient): (String, List<String>) -> Map<String, State.Value>? = { provider, keys ->

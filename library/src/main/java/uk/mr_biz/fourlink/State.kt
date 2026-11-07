@@ -51,8 +51,30 @@ object State {
     /**
      * One key's state. [seq] rises with every change of that key (Q1: from the process start time).
      * §15f: [level] 0 to 100 for a thing with a level (a light's brightness), [on] for a toggle.
+     * §15g: [read], on a trigger, the id of the provider's `read` function that gives the answer.
      */
-    data class Value(val token: Token, val extra: String? = null, val seq: Long, val level: Double? = null, val on: Boolean? = null)
+    data class Value(
+        val token: Token,
+        val extra: String? = null,
+        val seq: Long,
+        val level: Double? = null,
+        val on: Boolean? = null,
+        val read: String? = null,
+    )
+
+    /** §15g: a trigger's `read` is a function id, the catalogue's grammar. */
+    fun isFunctionId(s: String): Boolean = FunctionSpec.ID.matches(s)
+
+    /**
+     * §15g, for the subscriber: the functions to call for the triggers in [changed], resolved in the
+     * provider's [catalogue]. Only a `read` function counts; an id the catalogue lacks, or one that is
+     * not a read, is left out. Calling them stays the caller's job: an ordinary gated invoke, declared
+     * [Origin.MODEL], as the state reader does.
+     */
+    fun triggerReads(changed: Map<String, Value>, catalogue: Catalogue): Map<String, FunctionSpec> =
+        changed.mapNotNull { (key, v) ->
+            v.read?.let(catalogue::find)?.takeIf { it.effect == Effect.READ }?.let { key to it }
+        }.toMap()
 
     const val LEVEL_MIN = 0.0
     const val LEVEL_MAX = 100.0
@@ -87,6 +109,7 @@ object State {
                 v.extra?.let { e.put("extra", it) }
                 v.level?.let { e.put("level", if (it % 1.0 == 0.0) it.toLong() else it) }
                 v.on?.let { e.put("on", it) }
+                v.read?.let { e.put("read", it) }
             })
         }
         return o.toString()
@@ -114,7 +137,9 @@ object State {
                 (raw as? Number)?.toDouble()?.takeIf(::isLevel).also { if (it == null) onDrop("state $key: level dropped") }
             }
             val on = e.opt("on")?.let { raw -> (raw as? Boolean).also { if (it == null) onDrop("state $key: on dropped") } }
-            out[key] = Value(Token.read(e.opt("token") as? String), extra, seq!!, level, on)
+            // §15g: a read that is not a function id is dropped, the rest kept.
+            val read = e.opt("read")?.let { raw -> (raw as? String)?.takeIf(::isFunctionId).also { if (it == null) onDrop("state $key: read dropped") } }
+            out[key] = Value(Token.read(e.opt("token") as? String), extra, seq!!, level, on, read)
         }
         return out
     }
@@ -154,16 +179,35 @@ class StateStore(
      * Declares [key] (or changes it). A key or extra outside [namespace], a malformed one, is refused
      * with [IllegalArgumentException]: the provider's bug, caught in its own tests.
      */
-    fun set(key: String, token: State.Token, extra: String? = null, level: Double? = null, on: Boolean? = null) {
+    fun set(key: String, token: State.Token, extra: String? = null, level: Double? = null, on: Boolean? = null, read: String? = null) {
         require(State.isOwnName(namespace, key)) { "state key $key is not $namespace.<word> within ${State.NAME_MAX} characters" }
         require(extra == null || State.isOwnName(namespace, extra)) { "extra $extra is not $namespace.<word> within ${State.NAME_MAX} characters" }
         require(level == null || State.isLevel(level)) { "level $level is not 0 to 100" }
+        require(read == null || State.isFunctionId(read)) { "read $read is not a function id" }
         val seq: Long
         synchronized(this) {
             val old = values[key]
-            if (old != null && old.token == token && old.extra == extra && old.level == level && old.on == on) return
+            if (old != null && old.token == token && old.extra == extra && old.level == level && old.on == on && old.read == read) return
             seq = maxOf(old?.seq ?: processStartMs, processStartMs) + 1
-            values[key] = State.Value(token, extra, seq, level, on)
+            values[key] = State.Value(token, extra, seq, level, on, read)
+        }
+        onChange(key, seq)
+    }
+
+    /**
+     * §15g, a TRIGGER: one event. Bumps [key]'s seq and pings, with the rest of its state unchanged
+     * (`idle` for a new key). [read], when given, names the provider's `read` function that gives the
+     * answer; null keeps the one it has. The answer itself never goes in the state. Namespace rules as
+     * for [set]. Repeated touches within 100 ms coalesce into one ping of the latest (§15c).
+     */
+    fun touch(key: String, read: String? = null) {
+        require(State.isOwnName(namespace, key)) { "state key $key is not $namespace.<word> within ${State.NAME_MAX} characters" }
+        require(read == null || State.isFunctionId(read)) { "read $read is not a function id" }
+        val seq: Long
+        synchronized(this) {
+            val old = values[key]
+            seq = maxOf(old?.seq ?: processStartMs, processStartMs) + 1
+            values[key] = (old ?: State.Value(State.Token.IDLE, seq = seq)).copy(seq = seq, read = read ?: old?.read)
         }
         onChange(key, seq)
     }
