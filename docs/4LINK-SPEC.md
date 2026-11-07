@@ -708,12 +708,20 @@ with none, every key the provider has. Output `{ "states": "<JSON object as text
 
     { "4dictate.mic": { "token": "listening", "extra": "4dictate.command", "seq": 41 } }
 
-`seq` rises with every change of that key while the provider's process lives. A caller ignores
-a reply older than one it already has.
+`seq` starts, in each provider process, at that process's start time in milliseconds and rises
+by 1 with every change of that key (and never falls within a process, even if the clock steps
+back), so it rises across restarts too. A caller ignores a reply older than one it already has.
+
+Keys and extras are `<namespace>.<word>`, where the namespace is the provider's own (`4dictate`)
+and the whole is lower case letters, digits, `_` and one dot, at most 40 characters. A provider
+refuses to set a key or extra outside its namespace, or a token outside the four. A reader drops
+a malformed extra and keeps the token.
 
 `state.subscribe`: version 1.0, effect `read` (it changes nothing of the user's). Input
 `{ "keys": "<JSON array as text>" }`. Output `{ "keys": "<JSON array as text>", "seconds": n }`:
-the keys the provider has, and how long the subscription lasts (at most 86400). The provider
+the keys the provider has, and how long the subscription lasts (the provider chooses, at most
+86400; a renewal restarts the clock). Keys the provider does not have are left out; a subscribe
+naming only unknown keys stores nothing and leaves an existing subscription alone. The provider
 keeps subscriptions on disk, so they survive its own restart. A subscription ends when it runs
 out, when the subscriber's package is removed, or when the subscriber subscribes again with an
 empty list. A subscriber renews when it starts a session, and well before `seconds` runs out.
@@ -721,8 +729,10 @@ empty list. A subscriber renews when it starts a session, and well before `secon
 The ping: when a subscribed key changes, the provider sends an EXPLICIT broadcast to each
 subscribed package (`Intent.setPackage`), action `uk.mr_biz.4link.action.STATE`, extras
 `package` (the provider), `keys` (the changed keys, a string array) and `seq` (the highest).
-It sends at most one ping per key every 100 ms, carrying the latest. The provider does not wait
-for delivery.
+It sends at most one ping per key every 100 ms: the first change goes at once, and changes inside
+the window send one ping at its end with every key still pending and the highest `seq`. Each
+subscriber gets one broadcast naming only its own keys. The provider does not wait for delivery.
+`state.subscribe` counts in the 30 a minute; only `state.get` is outside it.
 
 - The ping carries no token. A broadcast's sender cannot be proven, so a ping only says "ask
   me". The subscriber then calls `state.get`, which is gated like any call (§5, §5a). A forged
