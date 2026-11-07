@@ -828,6 +828,25 @@ not how much.
   stay at 30 (owner, 2026-11-07), because a 2 s sweep is about 9 calls and a dial that stutters
   is worse than none.
 
+### 15g. Triggers: "this changed, ask me"
+
+Why: a surface follows the app the user is working in (4Zones' focus), and the owner ruled out
+polling (2026-11-07). The answer, the focused package and display, is not a token, a level or a
+name. It already has a function with a documented meaning and its own privacy rules (4Zones'
+`focus.read`, with its Secure Folder allow-list). So state carries only the event, and the
+answer stays where it is.
+
+- A TRIGGER is a state key whose token stays `idle` and whose `seq` rises with each event, even
+  though nothing else in the state changed. The provider bumps it with the library's
+  `touch(key)`. `set` with an unchanged value still does not ping.
+- Its state may carry `read`: the id of a `read` function in the provider's own catalogue that
+  gives the answer (`{ "token": "idle", "seq": 9, "read": "focus.read" }`). On a ping for that key,
+  the subscriber calls that function, an ordinary gated, counted invoke under that function's
+  own rules. A reader drops a `read` that is not a function id.
+- A trigger never carries the answer itself: no package, display or text in the state. The answer
+  goes only through the function, so its access rules apply every time.
+- Coalescing (100 ms, §15c) applies, so a burst of focus changes costs one read of the latest.
+
 ### 15d. Measured before sign-off
 
 The time from a provider's state change to the subscriber holding the new token, on the owner's
