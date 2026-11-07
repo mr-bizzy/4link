@@ -7,6 +7,7 @@ import uk.mr_biz.fourlink.CallerIdentity
 import uk.mr_biz.fourlink.Family
 import uk.mr_biz.fourlink.PairingStore
 import uk.mr_biz.fourlink.ProviderGate
+import uk.mr_biz.fourlink.Subscriptions
 import uk.mr_biz.fourlink.TextStorage
 import java.io.File
 
@@ -37,6 +38,9 @@ class FourLinkStores private constructor(context: Context) {
 
     /** Non-family providers THIS app may call (§7: "Apps 4Dictate may use"). */
     val approved: PairingStore by lazy { PairingStore(FileStorage(File(dir, "approved.json"))) }
+
+    /** Who asked for a state ping, and until when (§15c). */
+    val subscriptions: Subscriptions by lazy { Subscriptions(FileStorage(File(dir, "subscriptions.json"))) }
 
     val audit: AuditLog by lazy { AuditLog(FileStorage(File(dir, "audit.jsonl"))) }
 

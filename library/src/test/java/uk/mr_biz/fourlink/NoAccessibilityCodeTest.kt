@@ -29,14 +29,23 @@ class NoAccessibilityCodeTest {
         assertEquals(emptyList<String>(), hits)
     }
 
-    @Test fun `the only Android entry points are the provider, the client, the pairing helper, the stores and the receiver`() {
+    @Test fun `the only Android entry points are the provider, the client, the pairing helper, the stores, the state and the receiver`() {
         val android = sources.filter { it.path.contains("/android/") }.map { it.name }.sorted()
         assertEquals(
-            listOf("FourLinkClient.kt", "FourLinkProvider.kt", "FourLinkStores.kt", "PackageRemovedReceiver.kt", "PackageSigners.kt", "PairingRequest.kt"),
+            listOf("FourLinkClient.kt", "FourLinkProvider.kt", "FourLinkState.kt", "FourLinkStores.kt", "PackageRemovedReceiver.kt", "PackageSigners.kt", "PairingRequest.kt"),
             android,
         )
         // And nothing outside that folder imports android.* — the deciding code is pure.
         val leaks = sources.filter { !it.path.contains("/android/") && it.extension == "kt" && it.readText().contains("import android.") }
         assertEquals(emptyList<File>(), leaks)
+    }
+
+    /** §15c: state is never announced through a URI any app may observe, and every ping names its package. */
+    @Test fun `state goes by explicit broadcast, never notifyChange`() {
+        val hits = sources.filter { it.readText().contains("notifyChange") }.map { it.name }
+        assertEquals(emptyList<String>(), hits)
+        val state = sources.single { it.name == "FourLinkState.kt" }.readText()
+        assertTrue(state.contains("Intent(State.ACTION_STATE).setPackage(subscriber)"))
+        assertEquals(1, Regex("sendBroadcast\\(").findAll(state).count())
     }
 }

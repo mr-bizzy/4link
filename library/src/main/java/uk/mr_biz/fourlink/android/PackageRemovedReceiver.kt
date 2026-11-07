@@ -7,8 +7,8 @@ import android.content.Intent
 import android.util.Log
 
 /**
- * Uninstalling a caller removes its pairing (§6), and uninstalling a provider
- * removes its approval (§7). Declare in the member's manifest:
+ * Uninstalling a caller removes its pairing (§6) and its state subscription
+ * (§15c), and uninstalling a provider removes its approval (§7). Declare in the member's manifest:
  *
  * ```xml
  * <receiver android:name="uk.mr_biz.fourlink.android.PackageRemovedReceiver" android:exported="true">
@@ -29,6 +29,8 @@ class PackageRemovedReceiver : BroadcastReceiver() {
         val stores = FourLinkStores.of(context)
         val droppedPairing = stores.pairings.remove(pkg)
         val droppedApproval = stores.approved.remove(pkg)
-        if (droppedPairing || droppedApproval) Log.i("4Link", "$pkg uninstalled: pairing removed")
+        // §15c: a removed subscriber's state subscription ends with it.
+        val droppedSubscription = stores.subscriptions.remove(pkg)
+        if (droppedPairing || droppedApproval || droppedSubscription) Log.i("4Link", "$pkg uninstalled: pairing and subscription removed")
     }
 }
