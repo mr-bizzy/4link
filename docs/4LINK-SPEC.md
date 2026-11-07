@@ -195,11 +195,36 @@ and delete answer nothing. Three methods:
 |---|---|---|---|---|
 | `hello` | – | – | `app` (name), `4link` ("1.0"), `caller` ("family" / "paired" / "unknown") | anyone; reveals no functions |
 | `catalogue` | – | – | `json` (the catalogue; for a paired caller, only its granted functions) | family or paired |
-| `invoke` | function id | `json` (arguments), `version` (major the caller read) | `ok` (Boolean) and `json` (result) — and `frame` (§4a) from a `"frame": true` function — or `ok`=false with `error` (code) and `message` (a sentence for the user), for `bad_arguments` optionally `suggestion` (§11a), and for `refused` or `failed` optionally `reason` (§11b) | family, or paired and granted |
+| `invoke` | function id | `json` (arguments), `version` (major the caller read), `origin` (§4c) | `ok` (Boolean) and `json` (result) — and `frame` (§4a) from a `"frame": true` function — or `ok`=false with `error` (code) and `message` (a sentence for the user), for `bad_arguments` optionally `suggestion` (§11a), and for `refused` or `failed` optionally `reason` (§11b) | family, or paired and granted |
 
 A call that reaches a function runs inside the provider app, on a binder
 thread; a function that needs the main thread posts to it and waits, with a
 timeout, as 4Zones' door does. The provider never shows UI during an invoke.
+
+### 4c. Who chose the call (`origin`)
+
+Why: one family caller can carry both a model and the user's own triggers (4Dictate has a model
+and fixed voice commands; 4StreamDeck has keys). Some functions, or some argument values, must
+run only when the user triggered them, never on a model's choice: 4Zones' system keys (Back,
+Home, Recents, scroll, screenshot through `actions.run`) and `keys.press`. A provider cannot
+tell the two apart from the call alone (owner's go for the system keys, 2026-11-07).
+
+- `invoke` takes an optional extra `origin`: `"user"` when the user triggered this exact call (a
+  key or gesture they pressed, a fixed voice command mapped to a fixed action, a link they ran),
+  or `"model"` when a model chose the function or filled its arguments.
+- A family caller MUST set it on every invoke. A missing or unknown value, and every call from a
+  paired caller, is read as `"model"`.
+- A provider may refuse a function, or a particular argument value, unless `origin` is `"user"`.
+  It answers `refused` with a sentence and `reason` `"not_for_model"` (§11b, not fixable). It
+  keeps such functions and values visible in its lists, so a surface can still put them on a key.
+- `origin` is the caller's HONEST DECLARATION of provenance, not a proof. No provider can verify
+  that a person pressed anything. It is trusted only because a family caller is already trusted
+  by its certificate (§5a), and the risk it guards against is an honest app's model reaching
+  something it should not, not a hostile caller, which could lie about anything. A provider must
+  not rely on it against a caller it would not otherwise trust, and must not build a security
+  control on it.
+- A model-facing description never names a value that is refused to `"model"` (no enum or list
+  of such ids), so the model is never offered it.
 
 Discovery: every member declares an activity with the intent filter action
 `uk.mr_biz.4link.action.PAIR` (section 6). A caller lists those activities
