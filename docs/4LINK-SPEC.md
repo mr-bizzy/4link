@@ -792,7 +792,8 @@ not how much.
 The time from a provider's state change to the subscriber holding the new token, on the owner's
 S25 in DeX: with the subscriber shown in the foreground, in the background with a foreground
 service, and in the background without one. Median and worst of at least 20 changes each. The
-numbers go in this section before §15c ships.
+numbers go in this section before §15c reaches open testing. Internal testing may carry it, since
+Play is the only way onto the owner's devices and so the way it gets measured.
 
 ### 15e. Who does what
 
