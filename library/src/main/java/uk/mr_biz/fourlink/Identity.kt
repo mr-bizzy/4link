@@ -8,7 +8,16 @@ import java.security.MessageDigest
  * the SHA-256 digest of its current signing certificate. The package name
  * alone is never an identity.
  */
-data class Caller(val uid: Int, val packageName: String, val certDigest: String) {
+data class Caller(
+    val uid: Int,
+    val packageName: String,
+    val certDigest: String,
+    /**
+     * §4c: who chose THIS call, as the provider read it for an invoke ([Origin.read]); [Origin.MODEL]
+     * everywhere else. A declaration, not a proof (see [Origin]).
+     */
+    val origin: Origin = Origin.MODEL,
+) {
     /** The short form a person compares: the first 16 hex digits in fours. */
     val fingerprint: String get() = fingerprintOf(certDigest)
 

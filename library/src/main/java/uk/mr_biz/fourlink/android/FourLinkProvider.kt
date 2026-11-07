@@ -61,6 +61,7 @@ abstract class FourLinkProvider : ContentProvider() {
             FourLink.METHOD_CATALOGUE -> core.catalogue(caller)
             FourLink.METHOD_INVOKE -> core.invoke(
                 caller, arg, extras?.getString(FourLink.KEY_JSON), extras?.getString(FourLink.KEY_FUNCTION_VERSION),
+                extras?.getString(FourLink.EXTRA_ORIGIN),
             )
             else -> return null
         }

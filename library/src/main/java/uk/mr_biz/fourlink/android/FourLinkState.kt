@@ -11,6 +11,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import uk.mr_biz.fourlink.InvokeResult
+import uk.mr_biz.fourlink.Origin
 import uk.mr_biz.fourlink.Pinger
 import uk.mr_biz.fourlink.State
 import uk.mr_biz.fourlink.StateProvider
@@ -105,7 +106,9 @@ open class StatePingReceiver(private val subscriber: StateSubscriber) : Broadcas
 
         /** A [StateSubscriber]'s read through [client]: a gated `state.get`, parsed, or null on any failure. */
         fun reader(client: FourLinkClient): (String, List<String>) -> Map<String, State.Value>? = { provider, keys ->
-            when (val r = client.invoke(provider, State.GET_SPEC, JSONObject().put(State.KEY_KEYS, State.keysToText(keys)).toString())) {
+            // §4c: no model chose this read; the surface's own machinery did, for what the user sees. Declared
+            // "model", the reading that can never unlock anything kept for the user's own triggers.
+            when (val r = client.invoke(provider, State.GET_SPEC, JSONObject().put(State.KEY_KEYS, State.keysToText(keys)).toString(), Origin.MODEL)) {
                 is InvokeResult.Ok -> State.parseStates(JSONObject(r.json).optString(State.KEY_STATES)) { Log.w("4Link", "state: $it") }
                 else -> null
             }

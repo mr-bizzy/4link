@@ -16,6 +16,7 @@ import uk.mr_biz.fourlink.FourLink
 import uk.mr_biz.fourlink.FunctionSpec
 import uk.mr_biz.fourlink.HelloReply
 import uk.mr_biz.fourlink.InvokeResult
+import uk.mr_biz.fourlink.Origin
 import uk.mr_biz.fourlink.Retry
 
 /**
@@ -82,25 +83,31 @@ class FourLinkClient(context: Context) {
      * failure is returned: a change is never attempted into a process just failed to reach. A read
      * gets no hello: it already retries itself, and a hello would be a second call for nothing.
      * (The 4Dictate PM's condition, 2026-10-09.) The id-only form below sends no hello, unchanged.
+     *
+     * [origin] (§4c): [Origin.USER] when the user triggered this exact call, [Origin.MODEL] when a model
+     * chose it. Required, with no default, in both forms.
      */
-    fun invoke(packageName: String, function: FunctionSpec, argumentsJson: String): InvokeResult {
+    fun invoke(packageName: String, function: FunctionSpec, argumentsJson: String, origin: Origin): InvokeResult {
+        // [origin] (§4c) has NO default on purpose: every invoke says whether the user triggered it or a
+        // model chose it, so no caller can forget. A declaration, not a proof ([Origin]).
         if (function.effect != Effect.READ && call(packageName, FourLink.METHOD_HELLO, null, null) == null) {
             return InvokeResult.Unreachable("${labelOf(packageName)} did not answer.")
         }
-        return invoke(packageName, function.id, argumentsJson, function.major.toString(), function.effect)
+        return invoke(packageName, function.id, argumentsJson, function.major.toString(), function.effect, origin)
     }
 
     /**
      * The older form, without the function's declaration: its effect is unknown, so it is treated as
      * one that changes something and a binder failure is NOT retried. Prefer the [FunctionSpec] form.
      */
-    fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String): InvokeResult =
-        invoke(packageName, functionId, argumentsJson, versionRead, Effect.CHANGE)
+    fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String, origin: Origin): InvokeResult =
+        invoke(packageName, functionId, argumentsJson, versionRead, Effect.CHANGE, origin)
 
-    private fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String, effect: Effect): InvokeResult {
+    private fun invoke(packageName: String, functionId: String, argumentsJson: String, versionRead: String, effect: Effect, origin: Origin): InvokeResult {
         val extras = Bundle().apply {
             putString(FourLink.KEY_JSON, argumentsJson)
             putString(FourLink.KEY_FUNCTION_VERSION, versionRead)
+            putString(FourLink.EXTRA_ORIGIN, origin.wire)
         }
         val reply = call(packageName, FourLink.METHOD_INVOKE, functionId, extras, effect)
             ?: return InvokeResult.Unreachable("${labelOf(packageName)} did not answer.")

@@ -70,9 +70,9 @@ class ReasonTest {
         assertEquals(listOf("echo.say" to "refused"), audit.all().map { it.what to it.result })
     }
 
-    @Test fun `the core vocabulary is the agreed eight`() {
+    @Test fun `the core vocabulary is the agreed eight, and not_for_model from 4c`() {
         assertEquals(
-            setOf("not_set_up", "permission_off", "not_found", "busy", "unavailable", "rate_limited", "too_large", "user_declined"),
+            setOf("not_set_up", "permission_off", "not_found", "busy", "unavailable", "rate_limited", "too_large", "user_declined", "not_for_model"),
             FourLink.CORE_REASONS,
         )
         FourLink.CORE_REASONS.forEach { assertTrue(it, FourLink.mayDeclareReason(it)) }

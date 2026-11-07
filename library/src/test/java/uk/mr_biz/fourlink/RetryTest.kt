@@ -36,7 +36,7 @@ class RetryTest {
         val spec = client.substringAfter("fun invoke(packageName: String, function: FunctionSpec").substringBefore("fun invoke(packageName: String, functionId: String")
         assertTrue(spec.contains("function.effect != Effect.READ && call(packageName, FourLink.METHOD_HELLO, null, null) == null"))
         // The hello's failure returns BEFORE the change is sent.
-        assertTrue(spec.indexOf("return InvokeResult.Unreachable") < spec.indexOf("function.effect)"))
+        assertTrue(spec.indexOf("return InvokeResult.Unreachable") < spec.indexOf("function.effect, origin)"))
         assertTrue("the reason is written where someone would remove it", client.contains("so the change meets a live process and"))
         val idOnly = client.substringAfter("fun invoke(packageName: String, functionId: String").substringBefore("private fun invoke(")
         assertFalse("the id-only form sends no hello", idOnly.contains("METHOD_HELLO"))
@@ -44,6 +44,6 @@ class RetryTest {
 
     @Test fun `the old invoke form, with no declared effect, is treated as a change`() {
         val client = java.io.File("src/main/java/uk/mr_biz/fourlink/android/FourLinkClient.kt").readText()
-        assertTrue(client.contains("invoke(packageName, functionId, argumentsJson, versionRead, Effect.CHANGE)"))
+        assertTrue(client.contains("invoke(packageName, functionId, argumentsJson, versionRead, Effect.CHANGE, origin)"))
     }
 }

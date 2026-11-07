@@ -45,6 +45,8 @@ object FourLink {
     /** §11b — the shared core vocabulary. An unprefixed token MUST be one of these. */
     val CORE_REASONS: Set<String> = setOf(
         "not_set_up", "permission_off", "not_found", "busy", "unavailable", "rate_limited", "too_large", "user_declined",
+        // §4c names it unprefixed, so it is shared like the core tokens; without it here, a provider's refusal would lose it.
+        REASON_NOT_FOR_MODEL,
     )
 
     /** Well formed: what a READER accepts, so a core token added later still reads. */
@@ -52,6 +54,13 @@ object FourLink {
 
     /** What a PROVIDER may send: well formed, and either core or prefixed (§11b's MUST). */
     fun mayDeclareReason(token: String): Boolean = isReason(token) && ('.' in token || token in CORE_REASONS)
+    /** §4c — on an invoke: who chose the call, [ORIGIN_USER] or [ORIGIN_MODEL]. */
+    const val EXTRA_ORIGIN = "origin"
+    const val ORIGIN_USER = "user"
+    const val ORIGIN_MODEL = "model"
+    /** §4c — the reason a provider gives when it refuses something to a model (not fixable). */
+    const val REASON_NOT_FOR_MODEL = "not_for_model"
+
     /** On an invoke: the function's major version the caller read from the catalogue. */
     const val KEY_FUNCTION_VERSION = "version"
 

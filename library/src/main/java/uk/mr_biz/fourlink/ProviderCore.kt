@@ -63,7 +63,8 @@ class ProviderCore(
         }
     }
 
-    fun invoke(caller: Caller?, functionId: String?, argumentsJson: String?, versionRead: String?): Reply {
+    /** [originWire]: the `origin` extra as sent (§4c); the function sees it read into [Caller.origin]. */
+    fun invoke(caller: Caller?, functionId: String?, argumentsJson: String?, versionRead: String?, originWire: String? = null): Reply {
         if (caller == null) return unidentified()
         val id = functionId.orEmpty()
         val gated = gate.gateInvoke(caller, id)
@@ -79,7 +80,9 @@ class ProviderCore(
             return refuse(caller, id, ErrorCode.BAD_ARGUMENTS, "Bad arguments: $why.")
         }
         val arguments = JSONObject(argumentsJson ?: "{}")
-        val outcome = runCatching { perform(function, arguments, caller) }
+        // §4c: missing, unknown, or from anyone but family, it is a model's choice.
+        val withOrigin = caller.copy(origin = Origin.read(originWire, gate.standing(caller)))
+        val outcome = runCatching { perform(function, arguments, withOrigin) }
             .getOrElse { Outcome.Failed(it.message ?: "it failed") }
         return when (outcome) {
             is Outcome.Ok -> when {
