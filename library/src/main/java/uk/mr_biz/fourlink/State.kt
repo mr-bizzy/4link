@@ -48,8 +48,16 @@ object State {
         }
     }
 
-    /** One key's state. [seq] rises with every change of that key (Q1: from the process start time). */
-    data class Value(val token: Token, val extra: String? = null, val seq: Long)
+    /**
+     * One key's state. [seq] rises with every change of that key (Q1: from the process start time).
+     * §15f: [level] 0 to 100 for a thing with a level (a light's brightness), [on] for a toggle.
+     */
+    data class Value(val token: Token, val extra: String? = null, val seq: Long, val level: Double? = null, val on: Boolean? = null)
+
+    const val LEVEL_MIN = 0.0
+    const val LEVEL_MAX = 100.0
+
+    fun isLevel(level: Double): Boolean = !level.isNaN() && level in LEVEL_MIN..LEVEL_MAX
 
     // `<namespace>.<word>`: the namespace may start with a digit (4dictate), the word starts with a letter.
     private val NAME = Regex("[a-z0-9][a-z0-9_]*\\.[a-z][a-z0-9_]*")
@@ -75,7 +83,11 @@ object State {
     fun statesToText(states: Map<String, Value>): String {
         val o = JSONObject()
         for ((k, v) in states) {
-            o.put(k, JSONObject().put("token", v.token.wire).put("seq", v.seq).also { e -> v.extra?.let { e.put("extra", it) } })
+            o.put(k, JSONObject().put("token", v.token.wire).put("seq", v.seq).also { e ->
+                v.extra?.let { e.put("extra", it) }
+                v.level?.let { e.put("level", if (it % 1.0 == 0.0) it.toLong() else it) }
+                v.on?.let { e.put("on", it) }
+            })
         }
         return o.toString()
     }
@@ -97,7 +109,12 @@ object State {
             val extra = (e!!.opt("extra") as? String)?.takeIf {
                 isName(it).also { ok -> if (!ok) onDrop("state $key: extra dropped") }
             }
-            out[key] = Value(Token.read(e.opt("token") as? String), extra, seq!!)
+            // §15f: a level outside 0 to 100 (or not a number) is dropped and the token kept; so is an `on` that is not true or false.
+            val level = e.opt("level")?.let { raw ->
+                (raw as? Number)?.toDouble()?.takeIf(::isLevel).also { if (it == null) onDrop("state $key: level dropped") }
+            }
+            val on = e.opt("on")?.let { raw -> (raw as? Boolean).also { if (it == null) onDrop("state $key: on dropped") } }
+            out[key] = Value(Token.read(e.opt("token") as? String), extra, seq!!, level, on)
         }
         return out
     }
@@ -137,15 +154,16 @@ class StateStore(
      * Declares [key] (or changes it). A key or extra outside [namespace], a malformed one, is refused
      * with [IllegalArgumentException]: the provider's bug, caught in its own tests.
      */
-    fun set(key: String, token: State.Token, extra: String? = null) {
+    fun set(key: String, token: State.Token, extra: String? = null, level: Double? = null, on: Boolean? = null) {
         require(State.isOwnName(namespace, key)) { "state key $key is not $namespace.<word> within ${State.NAME_MAX} characters" }
         require(extra == null || State.isOwnName(namespace, extra)) { "extra $extra is not $namespace.<word> within ${State.NAME_MAX} characters" }
+        require(level == null || State.isLevel(level)) { "level $level is not 0 to 100" }
         val seq: Long
         synchronized(this) {
             val old = values[key]
-            if (old != null && old.token == token && old.extra == extra) return
+            if (old != null && old.token == token && old.extra == extra && old.level == level && old.on == on) return
             seq = maxOf(old?.seq ?: processStartMs, processStartMs) + 1
-            values[key] = State.Value(token, extra, seq)
+            values[key] = State.Value(token, extra, seq, level, on)
         }
         onChange(key, seq)
     }

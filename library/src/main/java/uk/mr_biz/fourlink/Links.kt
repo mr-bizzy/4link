@@ -18,6 +18,8 @@ object Links {
     const val ID_MAX = 200
     const val NAME_MAX = 60
     const val GROUP_MAX = 60
+    /** §15f: a key-cap label. */
+    const val SHORT_MAX = 16
 
     private val MAJOR_MINOR = Regex("\\d+\\.\\d+")
 
@@ -29,17 +31,25 @@ object Links {
         val version: String,
         val arguments: JSONObject,
         val group: String? = null,
+        /** §15f: a key-cap label, at most [SHORT_MAX]. */
+        val short: String? = null,
+        /** §15f: the one number argument of the call a slider or dial fills, 0 to 100. Without it, a key. */
+        val level: String? = null,
+        /** §15f: the provider's state key that shows this control. */
+        val state: String? = null,
     ) {
         fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name)
             .also { o -> group?.let { o.put("group", it) } }
             .put("function", function).put("version", version).put("arguments", JSONObject(arguments.toString()))
+            .also { o -> short?.let { o.put("short", it) }; level?.let { o.put("level", it) }; state?.let { o.put("state", it) } }
 
         // JSONObject has no value equality; compare the arguments as text.
         override fun equals(other: Any?): Boolean = other is Link && id == other.id && name == other.name &&
             function == other.function && version == other.version && group == other.group &&
+            short == other.short && level == other.level && state == other.state &&
             canonical(arguments) == canonical(other.arguments)
 
-        override fun hashCode(): Int = listOf(id, name, function, version, group, canonical(arguments)).hashCode()
+        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, canonical(arguments)).hashCode()
     }
 
     /** [value] as text with every object's keys sorted, so two equal argument objects compare equal. */
@@ -60,6 +70,9 @@ object Links {
         link.group != null && link.group.length > GROUP_MAX -> "group over $GROUP_MAX"
         !FunctionSpec.ID.matches(link.function) -> "function is not a 4Link id"
         !MAJOR_MINOR.matches(link.version) -> "version is not major.minor"
+        link.short != null && (link.short.isBlank() || link.short.length > SHORT_MAX) -> "short is empty or over $SHORT_MAX"
+        link.level != null && link.level.isBlank() -> "level names no argument"
+        link.state != null && !State.isName(link.state) -> "state is not a state key"
         else -> null
     }
 
@@ -83,10 +96,18 @@ object Links {
             val link = Link(
                 str("id").orEmpty(), str("name").orEmpty(), str("function").orEmpty(), str("version").orEmpty(),
                 arguments, str("group")?.ifEmpty { null },
+                short = str("short"), level = str("level"), state = str("state"),
             )
+            // A field of the wrong type is a malformed element, not a missing one.
+            if (listOf("short", "level", "state").any { o.has(it) && o.opt(it) !is String }) {
+                onDrop("element $i dropped: short, level and state must be text"); continue
+            }
             val why = problem(link) ?: when {
                 link.id in seen -> "duplicate id"
                 catalogue != null && catalogue.find(link.function) == null -> "function not in the provider's catalogue"
+                // §15f: with the catalogue, the level must be a number argument of that function.
+                catalogue != null && link.level != null &&
+                    catalogue.find(link.function)!!.input.properties[link.level] !is Schema.Num -> "level is not a number argument of ${link.function}"
                 else -> null
             }
             if (why != null) { onDrop("element $i dropped: $why"); continue }
