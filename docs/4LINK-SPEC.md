@@ -349,7 +349,7 @@ play/PLAY_CONSOLE.md.)
   no longer installed when it next checks).
 - Limits: a per-app rate limit of 30 calls a minute across `catalogue` and
   `invoke` (`hello` is not counted: it is a constant reply), answered
-  `rate_limited`; and an audit log of every call (section 9).
+  `rate_limited` (`state.get` has its own limit, §15c); and an audit log of every call (section 9).
 
 ## 7. The other direction: a family caller using a non-family provider
 
@@ -623,7 +623,7 @@ The reader enforces the limits (§3): an element over a limit, ill-formed, or wi
 - When a key is pressed, the caller invokes the call from the latest list for that `id`. If the
   call needs confirming (§3b), the caller asks first, as for any call.
 - The caller re-reads the list when it shows its links, and when the provider is installed or
-  updated. Nothing is pushed.
+  updated. Links are not pushed (§15 pushes state, not links).
 - The caller tells the user which of three things happened when a link does nothing, using the
   §11b reason: the link is absent from the list; the provider refused it (with its sentence, and
   whether the user can fix it); the provider did not answer.
@@ -643,3 +643,120 @@ The reader enforces the limits (§3): an element over a limit, ill-formed, or wi
   JSON names `uk.mr_biz.fourzones`.
 - 4Screenshots: unchanged. Its two links stay fixed in 4Zones (it has no 4Link provider, and its
   links are addresses, not calls).
+
+## 15. Pictures and state (for control surfaces)
+
+Why: 4StreamDeck shows family actions as keys on a phone, a tablet or an Elgato deck. Every key
+needs a picture, and the owner ruled (2026-11-07) that each app supplies its own, because a
+picture is a claim about what the action does and an app owns its claims (§5a). Some keys must
+also show what an app is doing now: 4Dictate's microphone key lights while it listens. Until
+now 4Link pushed nothing (§14b). This section adds one way for an app to say "this changed",
+shared by every member, so no app needs a private wire. Owner's go: 2026-11-07.
+
+Both parts are ordinary functions in the provider's catalogue. A provider that lacks them answers
+`unknown_function`, and the caller manages without (its own picture, no light).
+
+### 15a. Plumbing, not for a model
+
+`icons.get`, `state.get` and `state.subscribe` serve a surface, not a person's request. A caller
+that offers functions to a model (§12) leaves out every function whose id starts with `icons.`
+or `state.`, and refuses to invoke one the model names anyway.
+
+### 15b. Pictures: `icons.get`
+
+Version 1.0, effect `read`. Input `{ "ids": "<JSON array as text>" }` (text, because the schema
+subset has no arrays, §3), at most 32 ids a call. Output
+`{ "icons": "<JSON object as text>" }`:
+
+    { "snap1": { "d": "M3 3h8v8H3z", "evenodd": false },
+      "tasks.add": { "d": "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" } }
+
+- `ids`: what the provider itself lists for a key: a function id from its catalogue, or an id
+  from its own list (4Zones' `actions.list`).
+- A picture is one SVG path on a fixed 24 x 24 view box: `d` (at most 4096 characters) and
+  optional `evenodd` (fill rule, default false). Nothing else travels: no colour, no stroke, no
+  bitmap, no XML.
+- The reader checks `d` against the SVG path grammar: the commands `MmLlHhVvCcSsQqTtAaZz`,
+  numbers, spaces and commas, and nothing else. A picture over the limit or outside the grammar
+  is dropped with a log line, and the rest are kept.
+- An id may have no picture. A provider answers only the ids it has. A missing id is not an
+  error, and the caller draws its own (4Zones' generated keys, such as a layout's real shape or
+  a numbered desk, are the caller's to draw from `layouts.list`).
+- The caller colours the picture to its own scheme, so a surface keeps one palette, and the
+  user may replace any picture with their own. That choice is the caller's setting.
+- The caller keeps pictures by (package, versionCode) and asks again only when the provider
+  is installed or updated, so a first sight costs one call per 32 keys.
+
+### 15c. State: `state.get`, `state.subscribe` and the ping
+
+A provider names a few STATE KEYS (`4dictate.mic`, `4zones.access`). Each has a token from a
+fixed set, which says what the user should notice, never how it looks:
+
+| Token | Meaning |
+|---|---|
+| `idle` | Nothing to show |
+| `listening` | Taking the user's input now (a microphone open) |
+| `working` | Busy with something the user asked for (transcribing) |
+| `attention` | Needs the user (an error, a permission gone) |
+
+A state may also carry `extra`: one word in the provider's namespace (`4dictate.command`),
+at most 40 characters, which a caller may use or ignore. The caller decides what each token
+looks like, and the user's own colours win. An unknown token is read as `attention`.
+
+`state.get`: version 1.0, effect `read`. Input `{ "keys": "<JSON array as text>" }`, optional;
+with none, every key the provider has. Output `{ "states": "<JSON object as text>" }`:
+
+    { "4dictate.mic": { "token": "listening", "extra": "4dictate.command", "seq": 41 } }
+
+`seq` rises with every change of that key while the provider's process lives. A caller ignores
+a reply older than one it already has.
+
+`state.subscribe`: version 1.0, effect `read` (it changes nothing of the user's). Input
+`{ "keys": "<JSON array as text>" }`. Output `{ "keys": "<JSON array as text>", "seconds": n }`:
+the keys the provider has, and how long the subscription lasts (at most 86400). The provider
+keeps subscriptions on disk, so they survive its own restart. A subscription ends when it runs
+out, when the subscriber's package is removed, or when the subscriber subscribes again with an
+empty list. A subscriber renews when it starts a session, and well before `seconds` runs out.
+
+The ping: when a subscribed key changes, the provider sends an EXPLICIT broadcast to each
+subscribed package (`Intent.setPackage`), action `uk.mr_biz.4link.action.STATE`, extras
+`package` (the provider), `keys` (the changed keys, a string array) and `seq` (the highest).
+It sends at most one ping per key every 100 ms, carrying the latest. The provider does not wait
+for delivery.
+
+- The ping carries no token. A broadcast's sender cannot be proven, so a ping only says "ask
+  me". The subscriber then calls `state.get`, which is gated like any call (§5, §5a). A forged
+  ping costs one gated read and shows nothing false.
+- Never `ContentResolver.notifyChange`. Any app may observe a URI, and "4Dictate's state
+  changed" would tell a stranger app when the user starts speaking.
+- Family callers only, in this version. A paired caller is answered `not_granted` for
+  `state.get` and `state.subscribe`, whatever its grant. A user's activity going to another
+  developer's app is data under P4 and needs its privacy line first.
+- `state.get` is not counted in the 30 a minute (§6). It has its own limit of 120 a minute per
+  caller, so a busy mic light never uses up a surface's key presses.
+- A subscriber that needs live state keeps itself running (a foreground service) while its
+  surface is shown. Since Android 14 a frozen app's context-registered receivers get broadcasts
+  only when it thaws (Samsung freezes a background app about 6 s after the last key, measured on
+  the owner's S25), so a frozen surface shows the light late. This is the subscriber's job. The
+  provider does not change for it.
+
+### 15d. Measured before sign-off
+
+The time from a provider's state change to the subscriber holding the new token, on the owner's
+S25 in DeX: with the subscriber shown in the foreground, in the background with a foreground
+service, and in the background without one. Median and worst of at least 20 changes each. The
+numbers go in this section before §15c ships.
+
+### 15e. Who does what
+
+- Library: `icons.get` (reading with the limits and the path grammar, building), `state.get`,
+  `state.subscribe` (the store on disk, expiry, removal with the package), the ping (sending,
+  coalescing, a receiver helper for subscribers), the 120 a minute limit, and the §15a filter,
+  all unit-tested. The 4Dictate PM's.
+- 4Dictate: provides `4dictate.mic` (`idle`; `listening`, with `extra` `4dictate.command` for a
+  command; `working` while transcribing, which needs adding; `attention` on a capture error).
+  As a caller, it applies §15a. The 4Dictate PM's.
+- 4Zones: provides `icons.get` for its fixed actions and `4zones.access` (`attention` when its
+  window access is down). The 4Zones PM's.
+- 4StreamDeck: the caller, with pictures, user overrides, subscriptions and the foreground
+  service. The 4Zones PM's.
