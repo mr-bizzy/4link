@@ -646,7 +646,19 @@ and `confirm` (§3b) apply exactly as they do today.
 - `group`: optional, at most 60 characters, a heading to list links under.
 - `function`, `version`, `arguments`: the call. The function must be in the provider's own
   catalogue; `arguments` is a JSON object.
-- No icon. The caller shows the provider's app icon. (Never a bitmap in a reply: a bitmap in a
+- `app`: optional, the package name of the app this link opens or brings forward (a 4Zones Links
+  row for YouTube Music: `"app": "com.google.android.apps.youtube.music"`), at most 100
+  characters, Java package grammar. It names an app; it is not a picture. The caller draws that
+  app's own launcher icon with its PackageManager, at its own density. Running the link stays the
+  provider's call: the caller never launches `app` itself, so the provider (4Zones) still places
+  the window. Owner, 2026-11-07: an app reaches a surface as a link.
+- A link with no `app`, or with an `app` the caller cannot resolve (not installed, or not
+  visible to it under Android's package visibility), shows the provider's app icon, and the link
+  is still offered and still runs. A caller never hides a link because its icon is missing.
+- `app` is given to FAMILY callers only. A provider leaves it out of the list it gives a paired
+  caller, so another developer's app never learns which apps the user has put on a Links page.
+- No bitmap and no URL, ever. The caller shows the provider's app icon unless `app` gives a
+  better one. (Never a bitmap in a reply: a bitmap in a
   shortcut reply crashed the caller, 4Zones L12.)
 - Order: the array's order is the order. Groups appear in the order of their first link.
 
