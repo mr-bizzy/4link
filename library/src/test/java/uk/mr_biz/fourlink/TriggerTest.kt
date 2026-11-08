@@ -116,4 +116,14 @@ class TriggerTest {
         assertTrue(State.triggerReads(notARead + missing, zones).isEmpty())
         assertNull(State.triggerReads(mapOf("k.a" to State.Value(State.Token.IDLE, seq = 1)), zones)["k.a"])
     }
+
+    /** §15g: a trigger's read takes no arguments, so the helper always sends {} and offers no way to send more. */
+    @Test fun `the trigger read sends an empty object and takes no arguments`() {
+        assertEquals("{}", State.TRIGGER_READ_ARGUMENTS)
+        assertEquals(0, JSONObject(State.TRIGGER_READ_ARGUMENTS).length())
+        val src = java.io.File("src/main/java/uk/mr_biz/fourlink/android/FourLinkState.kt").readText()
+        assertTrue(src.contains("fun triggerRead(client: FourLinkClient, provider: String, function: FunctionSpec): InvokeResult"))
+        assertTrue(src.contains("client.invoke(provider, function, State.TRIGGER_READ_ARGUMENTS, Origin.MODEL)"))
+        assertTrue("no arguments parameter", !src.substringAfter("fun triggerRead(").substringBefore(")").contains("argumentsJson"))
+    }
 }

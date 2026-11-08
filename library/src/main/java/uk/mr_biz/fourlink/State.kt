@@ -62,6 +62,9 @@ object State {
         val read: String? = null,
     )
 
+    /** §15g: a trigger's read takes no arguments; the subscriber always sends this. */
+    const val TRIGGER_READ_ARGUMENTS = "{}"
+
     /** §15g: a trigger's `read` is a function id, the catalogue's grammar. */
     fun isFunctionId(s: String): Boolean = FunctionSpec.ID.matches(s)
 

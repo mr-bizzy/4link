@@ -111,8 +111,8 @@ open class StatePingReceiver(private val subscriber: StateSubscriber) : Broadcas
          * under that function's own rules, declared [Origin.MODEL] as the state reader's is. Call it off
          * the main thread, from `onChanged`.
          */
-        fun triggerRead(client: FourLinkClient, provider: String, function: FunctionSpec, argumentsJson: String = "{}"): InvokeResult =
-            client.invoke(provider, function, argumentsJson, Origin.MODEL)
+        fun triggerRead(client: FourLinkClient, provider: String, function: FunctionSpec): InvokeResult =
+            client.invoke(provider, function, State.TRIGGER_READ_ARGUMENTS, Origin.MODEL)
 
         /** A [StateSubscriber]'s read through [client]: a gated `state.get`, parsed, or null on any failure. */
         fun reader(client: FourLinkClient): (String, List<String>) -> Map<String, State.Value>? = { provider, keys ->
