@@ -654,7 +654,8 @@ and `confirm` (§3b) apply exactly as they do today.
   the window. Owner, 2026-11-07: an app reaches a surface as a link.
 - A link with no `app`, or with an `app` the caller cannot resolve (not installed, or not
   visible to it under Android's package visibility), shows the provider's app icon, and the link
-  is still offered and still runs. A caller never hides a link because its icon is missing.
+  is still offered and still runs. A caller never hides a link because its icon is missing. A
+  reader drops an ill-formed `app` and keeps the link.
 - `app` is given to FAMILY callers only. A provider leaves it out of the list it gives a paired
   caller, so another developer's app never learns which apps the user has put on a Links page.
 - No bitmap and no URL, ever. The caller shows the provider's app icon unless `app` gives a
