@@ -20,6 +20,13 @@ object Links {
     const val GROUP_MAX = 60
     /** §15f: a key-cap label. */
     const val SHORT_MAX = 16
+    /** §14a: the package name a link opens. */
+    const val APP_MAX = 100
+
+    private val PACKAGE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
+
+    /** §14a: a package name, Java grammar (two segments at least), at most [APP_MAX] characters. */
+    fun isApp(s: String): Boolean = s.length <= APP_MAX && PACKAGE.matches(s)
 
     private val MAJOR_MINOR = Regex("\\d+\\.\\d+")
 
@@ -37,19 +44,26 @@ object Links {
         val level: String? = null,
         /** §15f: the provider's state key that shows this control. */
         val state: String? = null,
+        /**
+         * §14a: the package this link opens or brings forward, so a surface can draw that app's own
+         * launcher icon. A name, not a picture; the caller never launches it itself. Family only:
+         * [forCaller] strips it for anyone else.
+         */
+        val app: String? = null,
     ) {
         fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name)
             .also { o -> group?.let { o.put("group", it) } }
             .put("function", function).put("version", version).put("arguments", JSONObject(arguments.toString()))
             .also { o -> short?.let { o.put("short", it) }; level?.let { o.put("level", it) }; state?.let { o.put("state", it) } }
+            .also { o -> app?.let { o.put("app", it) } }
 
         // JSONObject has no value equality; compare the arguments as text.
         override fun equals(other: Any?): Boolean = other is Link && id == other.id && name == other.name &&
             function == other.function && version == other.version && group == other.group &&
-            short == other.short && level == other.level && state == other.state &&
+            short == other.short && level == other.level && state == other.state && app == other.app &&
             canonical(arguments) == canonical(other.arguments)
 
-        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, canonical(arguments)).hashCode()
+        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, app, canonical(arguments)).hashCode()
     }
 
     /** [value] as text with every object's keys sorted, so two equal argument objects compare equal. */
@@ -97,6 +111,10 @@ object Links {
                 str("id").orEmpty(), str("name").orEmpty(), str("function").orEmpty(), str("version").orEmpty(),
                 arguments, str("group")?.ifEmpty { null },
                 short = str("short"), level = str("level"), state = str("state"),
+                // §14a: an ill-formed app is dropped, and the link KEPT (unlike every other limit here).
+                app = o.opt("app")?.let { raw ->
+                    (raw as? String)?.takeIf(::isApp).also { if (it == null) onDrop("element $i: app dropped, link kept") }
+                },
             )
             // A field of the wrong type is a malformed element, not a missing one.
             if (listOf("short", "level", "state").any { o.has(it) && o.opt(it) !is String }) {
@@ -125,8 +143,22 @@ object Links {
             val why = problem(l) ?: if (l.id in seen) "duplicate id" else null
             if (why != null) { onDrop("link ${l.id.take(40)} left out: $why"); continue }
             seen += l.id
-            a.put(l.toJson())
+            // As on reading: an ill-formed app goes, the link stays.
+            val kept = if (l.app != null && !isApp(l.app)) l.copy(app = null).also { onDrop("link ${l.id.take(40)}: app left out") } else l
+            a.put(kept.toJson())
         }
         return a.toString()
     }
+
+    /**
+     * §14a, the provider's list for one caller: `app` goes to FAMILY only. For anyone else it is
+     * stripped from every link, so another developer's app never learns which apps the user put on a
+     * Links page.
+     */
+    fun forCaller(links: List<Link>, standing: Standing): List<Link> =
+        if (standing == Standing.FAMILY) links else links.map { if (it.app == null) it else it.copy(app = null) }
+
+    /** [forCaller], written as `links.list` returns it. */
+    fun toTextFor(links: List<Link>, standing: Standing, onDrop: (String) -> Unit = {}): String =
+        toText(forCaller(links, standing), onDrop)
 }
