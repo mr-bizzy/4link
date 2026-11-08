@@ -51,12 +51,8 @@ reviewer can check each of the following against the code:
 - P2. 4Dictate's accessibility service keeps its existing, disclosed jobs
   only: typing the user's dictation into the focused field, and running fixed
   voice commands (a spoken phrase mapped to a fixed action). 4Link adds no
-  accessibility-driven behaviour, with ONE exception (owner, 2026-11-08): a key the user presses
-  on a family control surface (4StreamDeck, through 4Zones) may run one of 4Dictate's fixed text
-  actions (select, move, delete, undo, redo, copy, cut, paste, change case, Check, Rewrite) in the
-  focused field, exactly as the same action runs from 4Dictate's own keys. Each is a user-only
-  function (§3d): never offered to or run for a model, never from a paired app. The accessibility
-  declaration, the in-app disclosure and `play/ACCESSIBILITY_SPEC.md` say so before it ships.
+  accessibility-driven behaviour. The accessibility disclosure and
+  `play/ACCESSIBILITY_SPEC.md` do not change.
 - P3. Every model-chosen action that creates, changes or deletes anything is
   confirmed on screen (a "Do it / Cancel" dialog naming the app, the function
   and the arguments in plain words) before it is invoked, EXCEPT where the user
