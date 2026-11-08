@@ -736,6 +736,10 @@ subset has no arrays, §3), at most 32 ids a call. Output
 - The reader checks `d` against the SVG path grammar: the commands `MmLlHhVvCcSsQqTtAaZz`,
   numbers, spaces and commas, and nothing else. A picture over the limit or outside the grammar
   is dropped with a log line, and the rest are kept.
+- A caller that draws pictures handles the WHOLE grammar, relative commands and arcs included,
+  or treats a path it cannot draw as no picture and shows its own. Drawing part of a path, or
+  nothing, in place of the key's label is worse than no picture (4StreamDeck read only absolute
+  M L C Z, and 4Zones' pictures use thirteen commands; measured 2026-11-08).
 - An id may have no picture. A provider answers only the ids it has. A missing id is not an
   error, and the caller draws its own (4Zones' generated keys, such as a layout's real shape or
   a numbered desk, are the caller's to draw from `layouts.list`).
