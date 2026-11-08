@@ -728,8 +728,12 @@ subset has no arrays, §3), at most 32 ids a call. Output
     { "snap1": { "d": "M3 3h8v8H3z", "evenodd": false },
       "tasks.add": { "d": "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" } }
 
-- `ids`: what the provider itself lists for a key: a function id from its catalogue, or an id
-  from its own list (4Zones' `actions.list`).
+- `ids`: what the provider itself lists for a key: a function id from its catalogue, an id
+  from its own list (4Zones' `actions.list`), or a link `id` from its own `links.list` (§14a). A
+  caller that shows another app's link asks THAT link's provider for its picture, by the link's
+  id. A link needs no icon field: the picture comes through here or not at all.
+- A picture is optional for every id. With none, the caller shows the app's launcher icon (the
+  link's `app`, else the provider's), as §14a says.
 - A picture is one SVG path on a fixed 24 x 24 view box: `d` (at most 4096 characters) and
   optional `evenodd` (fill rule, default false). Nothing else travels: no colour, no stroke, no
   bitmap, no XML.
