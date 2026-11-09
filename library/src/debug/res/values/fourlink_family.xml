@@ -4,6 +4,7 @@
      family to each other. Never copied into src/main or src/release. -->
 <resources>
     <string-array name="fourlink_family_digests">
+        <item>98d58b42c8f6a02c26eb34e6c42981cc2b92ea67d4680b26e884593ab471f19d</item>
         <item>7ffc5b0df6b4ffb420d8965db8e041fa4398b534608142d110885b9e67cfd8d9</item>
         <item>92c51b99e38eb2f498375cd912cea900203ce6a19069d33ce8384203a1c2ad06</item>
         <item>d511f22254f19fbb0a1c7d71576a0b8242e2796ee6f9c05adb5ad549c6198a8e</item>
