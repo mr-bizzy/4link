@@ -50,20 +50,29 @@ object Links {
          * [forCaller] strips it for anyone else.
          */
         val app: String? = null,
+        /**
+         * §15f: false when the provider knows a press now would do nothing useful. Null (absent) or
+         * true is offered; a hint for drawing, never a gate. Fails open: see [parse].
+         */
+        val offered: Boolean? = null,
     ) {
+        /** Absent means offered (§15f): a link is greyed only on the provider's own `false`. */
+        val isOffered: Boolean get() = offered != false
+
         fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name)
             .also { o -> group?.let { o.put("group", it) } }
             .put("function", function).put("version", version).put("arguments", JSONObject(arguments.toString()))
             .also { o -> short?.let { o.put("short", it) }; level?.let { o.put("level", it) }; state?.let { o.put("state", it) } }
-            .also { o -> app?.let { o.put("app", it) } }
+            .also { o -> app?.let { o.put("app", it) }; offered?.let { o.put("offered", it) } }
 
         // JSONObject has no value equality; compare the arguments as text.
         override fun equals(other: Any?): Boolean = other is Link && id == other.id && name == other.name &&
             function == other.function && version == other.version && group == other.group &&
             short == other.short && level == other.level && state == other.state && app == other.app &&
+            offered == other.offered &&
             canonical(arguments) == canonical(other.arguments)
 
-        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, app, canonical(arguments)).hashCode()
+        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, app, offered, canonical(arguments)).hashCode()
     }
 
     /** [value] as text with every object's keys sorted, so two equal argument objects compare equal. */
@@ -114,6 +123,10 @@ object Links {
                 // §14a: an ill-formed app is dropped, and the link KEPT (unlike every other limit here).
                 app = o.opt("app")?.let { raw ->
                     (raw as? String)?.takeIf(::isApp).also { if (it == null) onDrop("element $i: app dropped, link kept") }
+                },
+                // §15f: only a JSON boolean counts; anything else is dropped and the link kept, offered.
+                offered = o.opt("offered")?.let { raw ->
+                    (raw as? Boolean).also { if (it == null) onDrop("element $i: offered dropped, link kept") }
                 },
             )
             // A field of the wrong type is a malformed element, not a missing one.
