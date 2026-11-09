@@ -847,7 +847,8 @@ not how much.
 - `offered` is a hint for drawing, never a gate. The provider works it out each time it answers
   `links.list`, from its own state; a press of a link marked `false` still goes through and gets
   the provider's own answer (a refusal in words, §11b). How it is drawn, greyed, hidden or moved,
-  is the surface's choice.
+  is the surface's choice. Why a field and not a dropped link (owner, 2026-11-09, choosing grey
+  over a key that vanishes and comes back): "I prefer faint grey - vanishing will cause concern."
 - A provider that sets `offered` on a link also names that link's `state`. When that state key
   pings (§15c), the caller reads `links.list` again for fresh values: one read in flight, the
   same backoff. No other rule maps a state to `offered` anywhere but in the provider.
