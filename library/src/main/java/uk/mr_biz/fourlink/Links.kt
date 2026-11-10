@@ -25,6 +25,9 @@ object Links {
 
     private val PACKAGE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
 
+    /** §15f: a link's `icon`, an id as long as a link id may be. */
+    fun isIconId(s: String): Boolean = s.isNotBlank() && s.length <= ID_MAX
+
     /** §14a: a package name, Java grammar (two segments at least), at most [APP_MAX] characters. */
     fun isApp(s: String): Boolean = s.length <= APP_MAX && PACKAGE.matches(s)
 
@@ -55,7 +58,16 @@ object Links {
          * true is offered; a hint for drawing, never a gate. Fails open: see [parse].
          */
         val offered: Boolean? = null,
+        /**
+         * §15f: the id, in this provider's own `icons.get`, of the picture for the link as it
+         * stands now (a toggle's Stop picture while it records). Null: the link's own id. Fails
+         * open: see [parse].
+         */
+        val icon: String? = null,
     ) {
+        /** §15b/§15f: the id to ask `icons.get` for. */
+        val iconId: String get() = icon ?: id
+
         /** Absent means offered (§15f): a link is greyed only on the provider's own `false`. */
         val isOffered: Boolean get() = offered != false
 
@@ -63,16 +75,16 @@ object Links {
             .also { o -> group?.let { o.put("group", it) } }
             .put("function", function).put("version", version).put("arguments", JSONObject(arguments.toString()))
             .also { o -> short?.let { o.put("short", it) }; level?.let { o.put("level", it) }; state?.let { o.put("state", it) } }
-            .also { o -> app?.let { o.put("app", it) }; offered?.let { o.put("offered", it) } }
+            .also { o -> app?.let { o.put("app", it) }; offered?.let { o.put("offered", it) }; icon?.let { o.put("icon", it) } }
 
         // JSONObject has no value equality; compare the arguments as text.
         override fun equals(other: Any?): Boolean = other is Link && id == other.id && name == other.name &&
             function == other.function && version == other.version && group == other.group &&
             short == other.short && level == other.level && state == other.state && app == other.app &&
-            offered == other.offered &&
+            offered == other.offered && icon == other.icon &&
             canonical(arguments) == canonical(other.arguments)
 
-        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, app, offered, canonical(arguments)).hashCode()
+        override fun hashCode(): Int = listOf(id, name, function, version, group, short, level, state, app, offered, icon, canonical(arguments)).hashCode()
     }
 
     /** [value] as text with every object's keys sorted, so two equal argument objects compare equal. */
@@ -128,6 +140,10 @@ object Links {
                 offered = o.opt("offered")?.let { raw ->
                     (raw as? Boolean).also { if (it == null) onDrop("element $i: offered dropped, link kept") }
                 },
+                // §15f: an ill-formed icon is dropped and the link kept, with its own id's picture.
+                icon = o.opt("icon")?.let { raw ->
+                    (raw as? String)?.trim()?.takeIf(::isIconId).also { if (it == null) onDrop("element $i: icon dropped, link kept") }
+                },
             )
             // A field of the wrong type is a malformed element, not a missing one.
             if (listOf("short", "level", "state").any { o.has(it) && o.opt(it) !is String }) {
@@ -157,7 +173,8 @@ object Links {
             if (why != null) { onDrop("link ${l.id.take(40)} left out: $why"); continue }
             seen += l.id
             // As on reading: an ill-formed app goes, the link stays.
-            val kept = if (l.app != null && !isApp(l.app)) l.copy(app = null).also { onDrop("link ${l.id.take(40)}: app left out") } else l
+            var kept = if (l.app != null && !isApp(l.app)) l.copy(app = null).also { onDrop("link ${l.id.take(40)}: app left out") } else l
+            if (kept.icon != null && !isIconId(kept.icon!!)) kept = kept.copy(icon = null).also { onDrop("link ${l.id.take(40)}: icon left out") }
             a.put(kept.toJson())
         }
         return a.toString()

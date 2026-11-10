@@ -855,6 +855,18 @@ not how much.
 - A relay (4Zones, passing a provider's links on to a surface) passes `offered` through unchanged
   and never sets it on another app's link. The rule for when a control is useful lives in the one
   app that knows it.
+- A toggle: one link whose label and picture follow the provider's state (4Dictate's
+  `dictation.toggle`: "Dictate", a microphone; "Stop", a square while it records; owner,
+  2026-11-10). `name` and `short` may differ between answers, and a link may carry `icon`: the id,
+  in the provider's own `icons.get`, of the picture for the link as it stands now. Without `icon`,
+  the picture is the link's own `id`'s. A reader drops an `icon` that is not text, is empty or
+  is over 200 characters, and keeps the link. The link's `id` never changes, so a key stays bound.
+- A link whose `name`, `short`, `icon` or `offered` follows a state names that `state`. The caller
+  keeps none of them past that state's next ping: it reads `links.list` again and draws what it is
+  sent, never rewriting the label. Pictures are still kept by (package, versionCode), so a toggle
+  costs no `icons.get` call per press.
+- Colour stays the surface's and the user's: no field here carries one (owner, 2026-11-10: "please
+  do not colour the keys apart from when busy").
 - A slider sends at most one call per 250 ms while it moves. It MUST send the final value when
   the gesture ends, even if that falls inside the 250 ms; the final value is the one that has to
   land.
