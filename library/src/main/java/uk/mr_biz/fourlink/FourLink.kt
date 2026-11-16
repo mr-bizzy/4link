@@ -94,6 +94,14 @@ object FourLink {
     const val FOURSTREAMDECK_RELEASE_DIGEST = "5c1c3f9c55247b189adf337b6509a3774488068ccf323cdeea91c680261f7e63"
 
     /**
+     * 4Keys' own release digest (owner, 2026-11-16). **4StreamDeck renamed**: STREAM DECK is
+     * Corsair's mark and the old name contained the whole of it, so the app has a new name, a new
+     * package (`uk.mr_biz.fourkeys`) and a new key. Play's app signing key was CHANGED to this one,
+     * which is what makes the digest knowable in advance — the October lesson from 4Screenshots.
+     */
+    const val FOURKEYS_RELEASE_DIGEST = "3dab05fabf4fe864abae0bffa03589716eaedbd80701d1264cd802eea387947a"
+
+    /**
      * 4Zones' own release digest (owner, 2026-10-20: the family's first app; CN=4Zones,
      * O=mr-biz apps, C=GB). From the 4Zones PM's records (10 Oct 2026): its upload key and
      * Play app signing certificate are the same value.
