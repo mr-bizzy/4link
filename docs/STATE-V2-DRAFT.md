@@ -48,11 +48,18 @@ output, the subscribe reply, a ping):
     { "key": "4home.light_hall", "token": "idle", "level": 40, "on": true, "seq": 1795301234567 }
 
 `key`, `token` and `seq` always; `extra`, `level`, `on` and `read` when §15c, §15f and §15g give
-them. `seq` keeps its v1 meaning (rises with every change, across restarts). A reader keeps, per
-key, the value with the highest `seq` and drops any older one, whichever way it came. Readers parse
+them. `seq` keeps its v1 meaning, made strict: a provider never emits a `seq` less than or equal to the
+last it emitted for that key, across restarts AND reboots (the library stores the last `seq` per
+key on disk and starts above it, whatever the clock says). A reader keeps, per key, the value with
+the highest `seq` and drops any older one, whichever way it came, except after a birth (§6). Readers parse
 it with v1's limits and drop malformed fields as v1 does.
 
 ## 4. Value pings (the PUBLISH)
+
+A ping carrying `values` goes to ONE subscriber package by `Intent.setPackage`, never as an
+implicit broadcast. v1 already sends it this way (measured on the S25: `pkg=uk.mr_biz.fourkeys`),
+but in v2 the payload is in the broadcast, so this is now what keeps the owner's lamp levels from
+any app that registers the action; it is a rule, not an inheritance (the 4Zones PM's point).
 
 A v2 ping is a v1 ping with one more extra, so a v1 subscriber still works (it ignores the extra
 and reads back, as today):
@@ -105,7 +112,11 @@ still caps its own reads (section 8), because a provider may carry an older libr
 
 - Birth. When a provider's process starts and its stored subscriptions (§15c, on disk) are
   loaded, the library sends each live subscriber one ping with `birth` = true and the values of
-  all its keys. The subscriber treats it as a snapshot. A restart no longer goes unnoticed.
+  all its keys. A restart no longer goes unnoticed. A birth RESETS the subscriber's `seq`
+watermark for that provider: its values are applied as they are, not filtered by `seq`, so a
+provider whose `seq` came back lower (a lost store, a bad clock) is never ignored for good. The
+subscriber also subscribes again on a birth, since a provider that lost its store has nothing to
+renew against, and re-reads that provider's catalogue (§7).
 - Ended. When a provider ends a subscription for any reason other than the subscriber's own
   empty subscribe (it ran out, the provider cleared its store, a key was withdrawn), it sends
   that subscriber one ping with `ended` = true and the keys that ended. The subscriber subscribes
@@ -124,6 +135,10 @@ still caps its own reads (section 8), because a provider may carry an older libr
   failed and never because a surface went to the background.
 - A subscriber renews well before `seconds` runs out, on a timer, not only when something
   happens to re-arm it.
+- A subscriber caches each provider's catalogue and reads it again only when the provider's
+  version changes or on a birth (§6), never before a routine subscribe, renewal or read. Of the
+  56 refusals on 21 Nov, 51 were `catalogue` calls made before re-subscribing (the 4Zones PM's
+  count); this makes their removal a rule rather than a side effect.
 - A ping for a key that only carries `level` or `on` never makes the subscriber read
   `links.list` or `catalogue`. Only a key that a link names for `offered`, `name`, `short` or
   `icon` (§15f) does, and then only links.list.
