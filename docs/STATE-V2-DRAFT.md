@@ -49,8 +49,11 @@ output, the subscribe reply, a ping):
 
 `key`, `token` and `seq` always; `extra`, `level`, `on` and `read` when §15c, §15f and §15g give
 them. `seq` keeps its v1 meaning, made strict: a provider never emits a `seq` less than or equal to the
-last it emitted for that key, across restarts AND reboots (the library stores the last `seq` per
-key on disk and starts above it, whatever the clock says). A reader keeps, per key, the value with
+last it emitted for that key, across restarts AND reboots, whatever the clock says. Gaps are
+allowed. The library persists enough to guarantee this; it need not record every value: one
+floor per provider on disk, written at process start as (current + a margin) and again only as
+the counter nears it, and each start begins above the stored floor (the 4Zones PM's design: a
+write per start, not per change). A reader keeps, per key, the value with
 the highest `seq` and drops any older one, whichever way it came, except after a birth (§6). Readers parse
 it with v1's limits and drop malformed fields as v1 does.
 
