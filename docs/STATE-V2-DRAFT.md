@@ -148,19 +148,178 @@ renew against, and re-reads that provider's catalogue (§7).
 
 ## 8. The budget: the user's press always gets through
 
-The 4Zones PM's section. Agreed in outline: a user's own action (an invoke with origin `user`)
-gets a budget that background traffic (catalogue, state, links.list) cannot use up; refusals
-counted where both PMs can read them on a release build.
+**This is the only section here that protects the owner rather than the plumbing, and it is the
+one that should ship first.**
+
+### 8.1 What happened, measured
+
+On the owner's S25 on 21 November 2026, while his desk travelled, 4Zones made **221 calls into
+4Home in one minute**. `FourLink.RATE_LIMIT_FAMILY_PER_MINUTE` is **120**, and it counts
+`catalogue` and `invoke` **together**. 4Home's gate refused 4Zones **56 times** with
+`rate_limited` — 51 of them `catalogue`, and **five of them `home.cover.act`: the owner's own desk
+presses**, at 21:49:46, :49, :58 and 21:50:01, :03.
+
+He pressed his key and nothing happened, because housekeeping had spent his allowance.
+
+**No amount of v2's thrift fixes that by itself.** Sections 4 to 7 make the flood much less likely;
+they cannot make it impossible. A provider that publishes faster than anyone expected, a subscriber
+with a bug, a burst after a long disconnection — any of them can fill a shared budget, and today
+the thing that loses is the press.
+
+### 8.2 The rule
+
+**A call the user themself caused must never be refused because background traffic has used the
+allowance.**
+
+4Link already carries what is needed and nothing new is invented: §4c puts `origin` on every call,
+`user` or `model`, and the gate's limiter is already keyed per caller.
+
+* The per-caller budget stays **120 a minute for a family caller**, unchanged.
+* **Background calls may draw on at most `120 − RESERVED`.** Proposed `RESERVED = 20`.
+* **A call with `origin: user` may draw on the whole 120.**
+
+So background can take 100 and no more; at least 20 remain, and only a user's own call can reach
+them. A press cannot be starved by a dot.
+
+Everything that is not the user's own action is background, with no exceptions worth carving out:
+`catalogue`, `state.get`, `state.subscribe`, `links.list`, `icons.get`, and any `invoke` the
+calling app decided to make on its own.
+
+### 8.3 Why this cannot be gamed into starving somebody else
+
+`origin` is **a declaration, not a proof** (§4c says so in those words), so a caller could mark
+everything `user`. That is bounded, and the bound is what makes the rule safe:
+
+**the limiter is keyed on the caller's package**, so a caller that lies about `origin` spends only
+its own 120. It cannot reach another app's reserve, and the provider's own work is not drawn from
+a caller's budget at all. The worst a lying family app achieves is to starve itself — and family
+callers are apps we signed, which is the same trust the family list already rests on.
+
+A paired (non-family) caller keeps its 30 a minute with the same split, proportionally: background
+at most 25, the user's own calls up to 30.
+
+### 8.4 What a refused user call must do
+
+Being refused is not the same as being lost. A call with `origin: user` that is refused for
+`rate_limited` is **retried under §7's floor** like any other, and the caller must not treat the
+refusal as an answer. 4Zones' own presses are the case in point: the owner pressed, nothing
+happened, and nothing anywhere said why.
+
+### 8.5 Open for the owner
+
+`RESERVED = 20` is a proposal, not a measurement. It is about six presses a second for ten seconds,
+which is far more than a hand produces; the cost is that background drops from 120 to 100, and
+after sections 4 to 7 the measured background is well under 20. **If he wants a different split,
+the number is one constant.**
+
+---
 
 ## 9. Refusals visible on a release build
 
-The 4Zones PM's section.
+### 9.1 What happened
+
+Those 56 refusals happened **in silence**. Nothing on the owner's phone, in either app, said that
+anything was being refused. They were found only because 4Home had gained a logging line that
+afternoon for an unrelated reason, and because the other PM counted them by hand.
+
+Meanwhile the owner spent an evening reporting symptoms — a stuck key colour, a frozen dot, a dead
+press — that were all one cause, and both PMs between us produced six mechanisms for it, of which
+five were wrong. **A counter would have replaced four hours with one look.**
+
+### 9.2 The rule
+
+**A gate that refuses a call counts it, and the count is readable on a release build.**
+
+* The library's gate keeps, per caller and per reason code, the number of refusals in the current
+  minute and a running total since process start.
+* Reasons are §4's existing codes — `rate_limited`, `not_paired`, `not_granted`,
+  `unknown_function`, `bad_arguments`, `refused`, `failed` — with no new vocabulary.
+* **Counters, not log lines.** A count is cheap, bounded and free of anything about what the user
+  was doing. Logging each refusal would put a caller's package name into a released log, which
+  4Zones' own §H10 forbids, and would bury the signal in exactly the flood it is there to report.
+
+### 9.3 Where they are read
+
+Two ways, and the second is what makes this worth building:
+
+* **The provider's own diagnostics surface.** Each app already has one.
+* **A caller can ask about itself.** A family caller may read *its own* refusal counts from a
+  provider. That is not a new permission: it is telling an app what that provider has already done
+  to that app, and nothing about anybody else.
+
+The second one lets a subscriber notice it is being refused and say so, instead of going quiet. A
+surface that has stopped being told anything currently looks exactly like a surface where nothing
+has changed — which is precisely how this hid.
+
+### 9.4 What is not in them
+
+No task id, display id, focused-task id, desk or root id, input-device identifier, argument value
+or key name. A reason code and a number. That keeps them inside 4Zones' §H10 and means they can be
+shown to the owner without a judgement call each time.
+
+---
 
 ## 10. Migration
 
-The 4Zones PM's section. Agreed in outline: the version is the library's; extras are additive;
-v1 provider with v2 subscriber and v2 provider with v1 subscriber both keep working; no day on
-which two apps must update together.
+### 10.1 The constraint that decides everything
+
+**Five apps, updated one at a time, by one person, at times he chooses.** 4Zones, 4Keys, 4Dictate,
+4Home and 4PDFs each go to Play separately and reach his phone separately. §14's links sat unadopted
+for weeks for exactly this reason.
+
+**So: no change may require two apps to move together, and there is no day on which anything
+switches over.**
+
+### 10.2 The version is the library's, not the app's
+
+An app's own version says nothing about what it can speak. What matters is which 4Link library it
+carries, and that is what the catalogue's `version` already reports (§10). Nothing new is needed:
+a v2 library announces itself the way every version has.
+
+### 10.3 The four combinations, all of which must work
+
+| provider | subscriber | what happens |
+|---|---|---|
+| v1 | v1 | exactly as today |
+| **v1** | **v2** | the ping carries no `values`, so the subscriber reads back — today's behaviour, minus the subscriber's own waste |
+| **v2** | **v1** | the extras are additive and a v1 subscriber ignores them, so it reads back as it always did |
+| v2 | v2 | the full saving |
+
+**Every extra is additive and optional.** `values`, `birth` and `ended` are extras on a ping that
+was already valid without them; `states` is a new field on an answer that was already valid without
+it. A reader that does not know a field drops it, which is v1's own parsing rule (§3 says readers
+use v1's limits).
+
+**A v2 subscriber must not require a v2 provider.** The test is simple and worth stating: with
+every provider pinned to v1, a v2 subscriber behaves as a v1 one, and the only difference is that
+it makes fewer calls of its own.
+
+### 10.4 The order of adoption, and what each step buys on its own
+
+Nothing waits for anything else:
+
+1. **The library ships.** Nothing changes until an app takes it.
+2. **A subscriber takes it** (4Zones first, since it is the one that flooded). It gains §7's
+   retry-is-not-an-unsubscription, §8's reserve on its own outgoing calls, and §9's counters.
+   **Buys something with every provider still on v1.**
+3. **A provider takes it** (4Home first, since it has the only 5 Hz source). Its pings start
+   carrying values, and any v2 subscriber stops reading back.
+4. **The rest follow whenever he uploads them.**
+
+### 10.5 What must be measured before it is called done
+
+§12's list, plus one: **with a v1 provider and a v2 subscriber, the dot still moves.** That is the
+combination most likely to be broken by accident and least likely to be tested by hand, because
+every device in the family will be v2 within a week of adoption and the case stops being
+reachable.
+
+### 10.6 What we are NOT doing
+
+* **No flag day, no coordinated release, no "v2 mode" setting.**
+* **No change to §15c's existing wire** beyond additive extras — a v1 ping stays a valid v2 ping.
+* **No MQTT broker** (§2), and no family broadcast permission: the apps are signed with different
+  keys, so a shared permission cannot install and a per-provider one is not granted to a subscriber
+  installed before it. §4's sender identity replaces it.
 
 ## 11. Who does what
 
