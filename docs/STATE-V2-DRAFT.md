@@ -281,11 +281,11 @@ five were wrong. **A counter would have replaced four hours with one look.**
 Two ways, and the second is what makes this worth building:
 
 * **The provider's own diagnostics surface.** Each app already has one.
-* **A caller can ask about itself.** A family caller may read *its own* refusal counts from a Built as `link.refusals` (no
-  arguments; output `refusals`, text: reason to `{minute, total}`), answered by id for family
-  callers and NEVER listed in a catalogue, since 4Zones offers catalogue functions as actions.
+* **A caller can ask about itself.** A family caller may read *its own* refusal counts from a
   provider. That is not a new permission: it is telling an app what that provider has already done
-  to that app, and nothing about anybody else.
+  to that app, and nothing about anybody else. Built as `link.refusals` (no arguments; output
+  `refusals`, text: reason to `{minute, total}`), answered by id for family callers and NEVER
+  listed in a catalogue, since 4Zones offers catalogue functions as actions.
 
 The second one lets a subscriber notice it is being refused and say so, instead of going quiet. A
 surface that has stopped being told anything currently looks exactly like a surface where nothing
