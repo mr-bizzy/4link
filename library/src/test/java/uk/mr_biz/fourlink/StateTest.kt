@@ -261,6 +261,7 @@ class StateTest {
             run = exec::run,
             schedule = timer::schedule,
             onChanged = { _, c -> changes += c },
+            now = clock,
         )
         fun ping(vararg keys: String) { sub.onPing("p", keys.toList()); }
     }

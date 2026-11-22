@@ -33,6 +33,27 @@ object State {
     /** At most one ping per key in this long, carrying the latest (§15c). */
     const val PING_GAP_MS = 100L
 
+    /** State v2 §5: when only a key's level moved, at most one ping a second (owner, item 199). */
+    const val LEVEL_GAP_MS = 1_000L
+
+    /**
+     * State v2 §4: the ping's payload, the same encoding as state.get's `states`. A subscriber uses
+     * it only when the sender is proven ([android.content.BroadcastReceiver.getSentFromUid]).
+     */
+    const val EXTRA_VALUES = "values"
+
+    /** State v2 §6: the provider's process started; the values are all its keys for this subscriber. */
+    const val EXTRA_BIRTH = "birth"
+
+    /** State v2 §6: the provider ended this subscription to these keys (it ran out). */
+    const val EXTRA_ENDED = "ended"
+
+    /** State v2 §4: over this many characters the ping goes without values (a plain v1 ping). */
+    const val VALUES_MAX = 8_192
+
+    /** The `values` extra for [states], or null when it would be over [VALUES_MAX]. */
+    fun valuesFor(states: Map<String, Value>): String? = statesToText(states).takeIf { it.length <= VALUES_MAX }
+
     /** `get` allows this many a minute per caller, apart from the caller's 30 or 120 (§6, §15c). */
     const val GET_PER_MINUTE = 120
 
@@ -160,7 +181,8 @@ object State {
         "Asks for a ping when these state keys change. Not for a person's request.",
         Effect.READ,
         Schema.Obj(mapOf(KEY_KEYS to Schema.Str(description = "JSON array of state keys; empty to stop")), setOf(KEY_KEYS)),
-        Schema.Obj(mapOf(KEY_KEYS to Schema.Str(), KEY_SECONDS to Schema.Num())),
+        // State v2 §4a: `states`, the current values of the keys accepted, as state.get gives them.
+        Schema.Obj(mapOf(KEY_KEYS to Schema.Str(), KEY_SECONDS to Schema.Num(), KEY_STATES to Schema.Str())),
     )
 }
 
@@ -174,9 +196,21 @@ object State {
 class StateStore(
     val namespace: String,
     private val processStartMs: Long,
+    /** State v2 §3: when given, every seq comes from it, so seq rises across restarts and reboots. */
+    private val seqs: SeqFloor? = null,
     private val onChange: (key: String, seq: Long) -> Unit = { _, _ -> },
 ) {
     private val values = linkedMapOf<String, State.Value>()
+    /** The seq of each key's last change when only its level moved (State v2 §5). */
+    private val levelOnlyAt = hashMapOf<String, Long>()
+
+    private fun nextSeq(old: State.Value?): Long {
+        val local = maxOf(old?.seq ?: processStartMs, processStartMs) + 1
+        return seqs?.next()?.let { maxOf(it, local) } ?: local
+    }
+
+    /** Whether the change of [key] that made [seq] moved its level and nothing else. */
+    @Synchronized fun levelOnly(key: String, seq: Long): Boolean = levelOnlyAt[key] == seq
 
     /**
      * Declares [key] (or changes it). A key or extra outside [namespace], a malformed one, is refused
@@ -191,8 +225,10 @@ class StateStore(
         synchronized(this) {
             val old = values[key]
             if (old != null && old.token == token && old.extra == extra && old.level == level && old.on == on && old.read == read) return
-            seq = maxOf(old?.seq ?: processStartMs, processStartMs) + 1
+            seq = nextSeq(old)
             values[key] = State.Value(token, extra, seq, level, on, read)
+            if (old != null && old.token == token && old.extra == extra && old.on == on && old.read == read) levelOnlyAt[key] = seq
+            else levelOnlyAt.remove(key)
         }
         onChange(key, seq)
     }
@@ -209,8 +245,9 @@ class StateStore(
         val seq: Long
         synchronized(this) {
             val old = values[key]
-            seq = maxOf(old?.seq ?: processStartMs, processStartMs) + 1
+            seq = nextSeq(old)
             values[key] = (old ?: State.Value(State.Token.IDLE, seq = seq)).copy(seq = seq, read = read ?: old?.read)
+            levelOnlyAt.remove(key)
         }
         onChange(key, seq)
     }
@@ -220,6 +257,13 @@ class StateStore(
     /** The states of [keys] it has (all when null); unknown keys are left out. */
     @Synchronized fun get(keys: Collection<String>? = null): Map<String, State.Value> =
         if (keys == null) LinkedHashMap(values) else keys.mapNotNull { k -> values[k]?.let { k to it } }.toMap()
+}
+
+/** A subscriber's read of a provider's state (State v2 §7 tells `rate_limited` apart). */
+sealed interface StateRead {
+    data class Got(val states: Map<String, State.Value>) : StateRead
+    object RateLimited : StateRead
+    object Failed : StateRead
 }
 
 /** One subscriber: its package, the keys it watches, and when that ends. */
@@ -239,6 +283,12 @@ class Subscriptions(
 ) {
     val seconds: Long = seconds.coerceIn(1, State.MAX_SECONDS)
     private val byPackage = linkedMapOf<String, Subscription>()
+
+    /**
+     * State v2 §6: hears a subscription the provider ended (it ran out), so the subscriber can be
+     * told. Not the subscriber's own empty subscribe, and not a removed package.
+     */
+    @Volatile var onEnded: ((Subscription) -> Unit)? = null
 
     init {
         runCatching { JSONArray(storage.read() ?: "[]") }.getOrNull()?.let { a ->
@@ -277,11 +327,18 @@ class Subscriptions(
     }
 
     /** The live subscriptions, dropping (and forgetting) any that ran out. */
-    @Synchronized fun live(): List<Subscription> {
-        val t = now()
-        val expired = byPackage.values.filter { it.expiresAtMs <= t }.map { it.packageName }
-        if (expired.isNotEmpty()) { expired.forEach(byPackage::remove); save() }
-        return byPackage.values.toList()
+    fun live(): List<Subscription> {
+        val ended: List<Subscription>
+        val out: List<Subscription>
+        synchronized(this) {
+            val t = now()
+            ended = byPackage.values.filter { it.expiresAtMs <= t }
+            if (ended.isNotEmpty()) { ended.forEach { byPackage.remove(it.packageName) }; save() }
+            out = byPackage.values.toList()
+        }
+        // Outside the lock: the listener sends a broadcast.
+        ended.forEach { s -> onEnded?.invoke(s) }
+        return out
     }
 
     /** Who watches any of [keys], and which of them each watches. */
@@ -310,19 +367,26 @@ class Pinger(
 ) {
     private val lastSent = hashMapOf<String, Long>()
     private val pending = linkedMapOf<String, Long>()
+    /** Pending keys with a change other than their level: those keep v1's 100 ms (State v2 §5). */
+    private val urgent = hashSetOf<String>()
     private var scheduledAt: Long? = null
 
-    fun changed(key: String, seq: Long) {
+    /** [levelOnly]: only the key's level moved, so it may wait [State.LEVEL_GAP_MS] (State v2 §5). */
+    fun changed(key: String, seq: Long, levelOnly: Boolean = false) {
         val due: Long
         synchronized(this) {
             pending[key] = maxOf(pending[key] ?: Long.MIN_VALUE, seq)
+            if (!levelOnly) urgent += key
             due = nextDue()
         }
         if (due <= now()) flush() else arm(due)
     }
 
+    private fun dueOf(key: String): Long =
+        (lastSent[key] ?: Long.MIN_VALUE / 2) + if (key in urgent) State.PING_GAP_MS else State.LEVEL_GAP_MS
+
     /** When the earliest pending key may go. */
-    private fun nextDue(): Long = pending.keys.minOf { (lastSent[it] ?: Long.MIN_VALUE / 2) + State.PING_GAP_MS }
+    private fun nextDue(): Long = pending.keys.minOf(::dueOf)
 
     private fun arm(at: Long) {
         synchronized(this) {
@@ -341,8 +405,8 @@ class Pinger(
         val t = now()
         val rest: Long?
         synchronized(this) {
-            ready = pending.filterKeys { (lastSent[it] ?: Long.MIN_VALUE / 2) + State.PING_GAP_MS <= t }
-            ready.keys.forEach { pending.remove(it); lastSent[it] = t }
+            ready = pending.filterKeys { dueOf(it) <= t }
+            ready.keys.forEach { pending.remove(it); urgent.remove(it); lastSent[it] = t }
             rest = if (pending.isEmpty()) null else nextDue()
         }
         if (ready.isNotEmpty()) {
@@ -376,7 +440,9 @@ class StateProvider(val store: StateStore, val subscriptions: Subscriptions) {
         val keys = subscriptions.subscribe(caller.packageName, requested, store.keys())
         return Outcome.Ok(
             JSONObject().put(State.KEY_KEYS, State.keysToText(keys))
-                .put(State.KEY_SECONDS, if (keys.isEmpty()) 0 else subscriptions.seconds).toString(),
+                .put(State.KEY_SECONDS, if (keys.isEmpty()) 0 else subscriptions.seconds)
+                // State v2 §4a: the values now, so the subscriber needs no read to start.
+                .put(State.KEY_STATES, State.statesToText(store.get(keys))).toString(),
         )
     }
 
@@ -412,7 +478,21 @@ class StateSubscriber(
     private val run: (task: () -> Unit) -> Unit,
     private val schedule: (delayMs: Long, task: () -> Unit) -> Unit,
     private val onChanged: (provider: String, states: Map<String, State.Value>) -> Unit = { _, _ -> },
+    /**
+     * State v2 §7: the read, saying WHY it failed, so `rate_limited` can wait longer. When null,
+     * [read] is used and every failure is [StateRead.Failed].
+     */
+    fetch: ((provider: String, keys: List<String>) -> StateRead)? = null,
+    /** State v2 §6: the provider restarted. Subscribe to it again and re-read its catalogue. */
+    private val birthHeard: (provider: String) -> Unit = {},
+    /** State v2 §6: the provider ended these keys' subscription. Subscribe again if still wanted. */
+    private val endedHeard: (provider: String, keys: List<String>) -> Unit = { _, _ -> },
+    /** For the §7 cap on retries a minute. */
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
+    private val fetch: (String, List<String>) -> StateRead =
+        fetch ?: { p, k -> read(p, k)?.let { StateRead.Got(it) } ?: StateRead.Failed }
+
     private val held = hashMapOf<Pair<String, String>, State.Value>()
 
     /** One provider's reading: a read in flight, keys asked for meanwhile, a retry waiting. */
@@ -424,6 +504,8 @@ class StateSubscriber(
         var retryGeneration = 0
         var retryWaiting = false
         var backoffMs = 0L
+        /** When each retry read of the last minute started (State v2 §7: at most 6 a minute). */
+        val retriesAt = ArrayDeque<Long>()
     }
 
     private val readings = hashMapOf<String, Reading>()
@@ -454,12 +536,49 @@ class StateSubscriber(
 
     private fun startRead(provider: String, keys: List<String>) {
         run {
-            val result = runCatching { read(provider, keys) }.getOrNull()
+            val result = runCatching { fetch(provider, keys) }.getOrElse { StateRead.Failed }
             finished(provider, keys, result)
         }
     }
 
-    private fun finished(provider: String, keys: List<String>, result: Map<String, State.Value>?) {
+    /**
+     * State v2 §4: values from a PROVEN ping (the sender checked, see `StatePings`), applied by seq
+     * with no read. A key the ping names but [values] lacks is read, as v1. §4a: a subscribe
+     * reply's `states` comes here too, with its keys.
+     */
+    fun onValues(provider: String?, keys: List<String>?, values: Map<String, State.Value>) {
+        if (provider == null || provider !in tracked()) return
+        val changed = accept(provider, values)
+        if (changed.isNotEmpty()) onChanged(provider, changed)
+        val missing = keys.orEmpty().filter { it !in values }
+        if (missing.isNotEmpty()) onPing(provider, missing)
+    }
+
+    /**
+     * State v2 §6: the provider started. Its values are applied as given, not filtered by seq (the
+     * watermark is reset, so a provider whose seq came back lower is never ignored for good), and
+     * [birthHeard] asks the app to subscribe again.
+     */
+    fun onBirth(provider: String?, values: Map<String, State.Value>) {
+        if (provider == null || provider !in tracked()) return
+        val changed: Map<String, State.Value>
+        synchronized(this) {
+            held.keys.removeAll { it.first == provider }
+            changed = LinkedHashMap(values)
+            values.forEach { (k, v) -> held[provider to k] = v }
+        }
+        if (changed.isNotEmpty()) onChanged(provider, changed)
+        birthHeard(provider)
+    }
+
+    /** State v2 §6: the provider ended these keys. Silence never means "unsubscribed". */
+    fun onEnded(provider: String?, keys: List<String>?) {
+        if (provider == null || provider !in tracked()) return
+        endedHeard(provider, keys.orEmpty().filter(State::isName))
+    }
+
+    private fun finished(provider: String, keys: List<String>, fetched: StateRead) {
+        val result = (fetched as? StateRead.Got)?.states
         val changed = if (result != null) accept(provider, result) else emptyMap()
         var next: List<String>? = null
         var retry: Pair<Long, Int>? = null
@@ -471,7 +590,12 @@ class StateSubscriber(
                 r.dirty.clear()
                 r.inFlight = false
                 r.retryWaiting = true
-                retry = r.backoffMs to ++r.retryGeneration
+                // State v2 §7: a rate_limited answer waits at least 10 s, and retries stay within 6 a minute.
+                var delay = if (fetched == StateRead.RateLimited) maxOf(r.backoffMs, RATE_LIMITED_RETRY_MS) else r.backoffMs
+                val t = now()
+                while (r.retriesAt.isNotEmpty() && t - r.retriesAt.first() >= 60_000L) r.retriesAt.removeFirst()
+                if (r.retriesAt.size >= MAX_RETRIES_PER_MINUTE) delay = maxOf(delay, r.retriesAt.first() + 60_000L - t)
+                retry = delay to ++r.retryGeneration
             } else {
                 r.backoffMs = 0
                 if (r.dirty.isNotEmpty()) {
@@ -497,6 +621,7 @@ class StateSubscriber(
             r.inFlight = true
             keys = r.retryKeys.toList()
             r.retryKeys.clear()
+            r.retriesAt.addLast(now())
         }
         startRead(provider, keys)
     }
@@ -522,5 +647,37 @@ class StateSubscriber(
     companion object {
         const val FIRST_RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 30_000L
+        /** State v2 §7: after `rate_limited`, no retry sooner than this. */
+        const val RATE_LIMITED_RETRY_MS = 10_000L
+        /** State v2 §7: all retries to one provider together, at most this many a minute. */
+        const val MAX_RETRIES_PER_MINUTE = 6
+    }
+}
+
+/**
+ * State v2 §3: seq never repeats or goes back for this provider, across restarts AND reboots, whatever
+ * the wall clock says. One floor on disk: at start the counter begins above both the clock and the
+ * stored floor, and the floor is written as (counter + [margin]); it is written again only when the
+ * counter comes within a tenth of the margin of it. A write per start, not per change (the 4Zones PM's
+ * design). Gaps are allowed.
+ */
+class SeqFloor(private val storage: TextStorage, startMs: Long, private val margin: Long = 1_000_000L) {
+    private var counter: Long
+    private var floor: Long
+
+    init {
+        val stored = runCatching { storage.read()?.trim()?.toLong() }.getOrNull() ?: 0L
+        counter = maxOf(startMs, stored)
+        floor = counter + margin
+        runCatching { storage.write(floor.toString()) }
+    }
+
+    @Synchronized fun next(): Long {
+        counter++
+        if (counter >= floor - margin / 10) {
+            floor = counter + margin
+            runCatching { storage.write(floor.toString()) }
+        }
+        return counter
     }
 }
