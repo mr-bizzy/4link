@@ -12,7 +12,8 @@ import org.json.JSONObject
 object State {
     const val GET = "state.get"
     const val SUBSCRIBE = "state.subscribe"
-    const val VERSION = "1.0"
+    /** 1.1: State v2, `states` in the subscribe reply (§4a). */
+    const val VERSION = "1.1"
 
     const val KEY_KEYS = "keys"
     const val KEY_STATES = "states"

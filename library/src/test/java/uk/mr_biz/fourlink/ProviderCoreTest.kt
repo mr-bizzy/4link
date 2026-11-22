@@ -36,9 +36,9 @@ class ProviderCoreTest {
     }
 
     @Test fun `hello is always answered and names no function`() {
-        assertEquals(Reply.Hello("4Link Echo", "1.0", Standing.FAMILY), core.hello(us))
-        assertEquals(Reply.Hello("4Link Echo", "1.0", Standing.UNKNOWN), core.hello(stranger))
-        assertEquals(Reply.Hello("4Link Echo", "1.0", Standing.UNKNOWN), core.hello(null))
+        assertEquals(Reply.Hello("4Link Echo", FourLink.VERSION, Standing.FAMILY), core.hello(us))
+        assertEquals(Reply.Hello("4Link Echo", FourLink.VERSION, Standing.UNKNOWN), core.hello(stranger))
+        assertEquals(Reply.Hello("4Link Echo", FourLink.VERSION, Standing.UNKNOWN), core.hello(null))
         assertTrue(audit.all().isEmpty())
     }
 

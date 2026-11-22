@@ -67,8 +67,10 @@ any app that registers the action; it is a rule, not an inheritance (the 4Zones 
 A v2 ping is a v1 ping with one more extra, so a v1 subscriber still works (it ignores the extra
 and reads back, as today):
 
-- `values`: text, a JSON array of value objects (§3), one per changed key named in the ping, at
-  most 8 KB. Over 8 KB, the provider leaves `values` out and the ping is a plain v1 ping.
+- `values`: text, the changed keys' value objects (§3) in EXACTLY state.get's `states` encoding
+  (an object from key to value), so one parser reads both, at most 8 KB. Over 8 KB, the provider
+  leaves `values` out and the ping is a plain v1 ping. (Built 2026-11-22: the array form first
+  drafted here would have been a second encoding of the same thing.)
 
 Sender proof. A broadcast's sender cannot be proven in v1, which is why v1 pings carry nothing.
 From Android 14 (API 34) it can: the provider sends with
@@ -279,7 +281,9 @@ five were wrong. **A counter would have replaced four hours with one look.**
 Two ways, and the second is what makes this worth building:
 
 * **The provider's own diagnostics surface.** Each app already has one.
-* **A caller can ask about itself.** A family caller may read *its own* refusal counts from a
+* **A caller can ask about itself.** A family caller may read *its own* refusal counts from a Built as `link.refusals` (no
+  arguments; output `refusals`, text: reason to `{minute, total}`), answered by id for family
+  callers and NEVER listed in a catalogue, since 4Zones offers catalogue functions as actions.
   provider. That is not a new permission: it is telling an app what that provider has already done
   to that app, and nothing about anybody else.
 

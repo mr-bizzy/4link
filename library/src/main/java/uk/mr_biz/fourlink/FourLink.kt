@@ -7,7 +7,8 @@ package uk.mr_biz.fourlink
  */
 object FourLink {
     /** The protocol version a catalogue carries, and the major a caller must know. */
-    const val VERSION = "1.0"
+    /** 1.1: State v2 (press reserve, refusal counts, values in pings, birth and ended). Additive: majors match. */
+    const val VERSION = "1.1"
     const val MAJOR = 1
 
     /** Every member's provider authority is its package name plus this. */

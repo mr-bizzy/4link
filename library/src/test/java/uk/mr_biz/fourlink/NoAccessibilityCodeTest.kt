@@ -46,7 +46,9 @@ class NoAccessibilityCodeTest {
         assertEquals(emptyList<String>(), hits)
         val state = sources.single { it.name == "FourLinkState.kt" }.readText()
         assertTrue(state.contains("Intent(State.ACTION_STATE).setPackage(subscriber)"))
-        assertEquals(1, Regex("sendBroadcast\\(").findAll(state).count())
+        // State v2 §4: two calls (Android 14+ shares the sender's identity), both of the ONE intent built with setPackage.
+        assertEquals(1, Regex("Intent\\(State.ACTION_STATE\\)").findAll(state).count())
+        assertEquals(Regex("sendBroadcast\\(").findAll(state).count(), Regex("sendBroadcast\\(intent[,)]").findAll(state).count())
         // The ping comes from another app: a context-registered receiver must be exported.
         assertTrue(state.contains("Context.RECEIVER_EXPORTED"))
     }

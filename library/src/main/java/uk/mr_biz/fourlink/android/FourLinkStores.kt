@@ -42,6 +42,9 @@ class FourLinkStores private constructor(context: Context) {
     /** Who asked for a state ping, and until when (§15c). */
     val subscriptions: Subscriptions by lazy { Subscriptions(FileStorage(File(dir, "subscriptions.json"))) }
 
+    /** State v2 §3: this app's seq floor, so seq rises across restarts and reboots. */
+    val seqFloor: TextStorage by lazy { FileStorage(File(dir, "seq-floor.txt")) }
+
     val audit: AuditLog by lazy { AuditLog(FileStorage(File(dir, "audit.jsonl"))) }
 
     val signers: PackageSigners by lazy { PackageSigners(app.packageManager) }
