@@ -142,9 +142,12 @@ renew against, and re-reads that provider's catalogue (§7).
   version changes or on a birth (§6), never before a routine subscribe, renewal or read. Of the
   56 refusals on 21 Nov, 51 were `catalogue` calls made before re-subscribing (the 4Zones PM's
   count); this makes their removal a rule rather than a side effect.
-- A ping for a key that only carries `level` or `on` never makes the subscriber read
-  `links.list` or `catalogue`. Only a key that a link names for `offered`, `name`, `short` or
-  `icon` (§15f) does, and then only links.list.
+- A ping that changes only `level` for a key this subscriber process has already seen never
+  makes it read `links.list` or `catalogue`. A key the process has never seen, or a change to
+  anything else about it (`token`, `on`, `extra`), may cost one links.list, so a row that has
+  vanished or changed is noticed. That is bounded by the number of rows, once per key per process.
+  The same key buying links.list twice for level-only pings in one process is a defect (the 4Zones
+  PM's rule; measured on the S25 2026-11-22: one per key after 4Zones 122 restarted).
 
 ## 8. The budget: the user's press always gets through
 
