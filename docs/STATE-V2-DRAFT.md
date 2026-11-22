@@ -285,7 +285,9 @@ Two ways, and the second is what makes this worth building:
   provider. That is not a new permission: it is telling an app what that provider has already done
   to that app, and nothing about anybody else. Built as `link.refusals` (no arguments; output
   `refusals`, text: reason to `{minute, total}`), answered by id for family callers and NEVER
-  listed in a catalogue, since 4Zones offers catalogue functions as actions.
+  listed in a catalogue, since 4Zones offers catalogue functions as actions. A caller knows it exists
+  from the provider's version (`hello` or the catalogue says 1.1 or later), never by trying it: an
+  `unknown_function` from a v1 provider would void a cached catalogue (the 4Zones PM's L95).
 
 The second one lets a subscriber notice it is being refused and say so, instead of going quiet. A
 surface that has stopped being told anything currently looks exactly like a surface where nothing
