@@ -189,8 +189,19 @@ open class StatePingReceiver(private val subscriber: StateSubscriber) : Broadcas
  * `tracked` list is the family check, as for any ping.
  */
 object StatePings {
-    /** Hands [intent] to [subscriber]: values when proven, birth and ended, or a v1 ping. Call from onReceive. */
-    fun deliver(receiver: BroadcastReceiver, context: Context, intent: Intent, subscriber: StateSubscriber) {
+    /**
+     * Hands [intent] to [subscriber]: values when proven, birth and ended, or a v1 ping. Call from onReceive.
+     * [onLegacyPing] gets every key that still needs a gated read (a v1 ping, or a key a proven ping
+     * names without a value), so a subscriber that paces its own reads keeps its pacing (the 4Zones
+     * PM's ReadGate); by default the subscriber reads at once.
+     */
+    fun deliver(
+        receiver: BroadcastReceiver,
+        context: Context,
+        intent: Intent,
+        subscriber: StateSubscriber,
+        onLegacyPing: (provider: String?, keys: List<String>?) -> Unit = subscriber::onPing,
+    ) {
         val provider = intent.getStringExtra(State.EXTRA_PACKAGE)
         val keys = intent.getStringArrayExtra(State.EXTRA_KEYS)?.toList()
         val proven = provider != null && proven(receiver, context, provider)
@@ -202,8 +213,11 @@ object StatePings {
         val values = if (proven) intent.getStringExtra(State.EXTRA_VALUES)?.let { State.parseStates(it) { w -> Log.w("4Link", "state: $w") } } else null
         when {
             intent.getBooleanExtra(State.EXTRA_BIRTH, false) && values != null -> subscriber.onBirth(provider, values)
-            values != null -> subscriber.onValues(provider, keys, values)
-            else -> subscriber.onPing(provider, keys)
+            values != null -> {
+                subscriber.onValues(provider, null, values)
+                keys?.filter { it !in values }?.takeIf { it.isNotEmpty() }?.let { onLegacyPing(provider, it) }
+            }
+            else -> onLegacyPing(provider, keys)
         }
     }
 
