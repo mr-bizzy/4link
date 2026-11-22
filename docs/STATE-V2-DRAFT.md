@@ -182,8 +182,21 @@ So background can take 100 and no more; at least 20 remain, and only a user's ow
 them. A press cannot be starved by a dot.
 
 Everything that is not the user's own action is background, with no exceptions worth carving out:
-`catalogue`, `state.get`, `state.subscribe`, `links.list`, `icons.get`, and any `invoke` the
-calling app decided to make on its own.
+`catalogue`, `state.subscribe`, `links.list`, `icons.get`, and any `invoke` the calling app decided
+to make on its own.
+
+**`state.get` is NOT in this bucket and is deliberately left out of it.** `Gate.gateInvoke` answers
+it from its own limiter — `State.GET_PER_MINUTE`, 120 a minute — and returns before the shared
+limiter is consulted at all. So **a read cannot starve a press by construction**, which is a
+stronger guarantee than a reserve and needs nothing added. Moving it into the shared bucket would
+make a dot able to compete with a press, which is the fault this section exists to remove.
+
+What that does NOT mean is that reads are free: his desk at 5 Hz asked for about 300 a minute
+against that 120, so reads were refused too — the cost of which is a stale dot, not a dead press.
+Sections 5 to 7 are what hold that down.
+
+**`catalogue` carries no `origin` at all** — `Gate.gateCatalogue(caller)` takes none — so it is
+always background. Stated so that nobody later adds one to it.
 
 ### 8.3 Why this cannot be gamed into starving somebody else
 
@@ -195,15 +208,35 @@ its own 120. It cannot reach another app's reserve, and the provider's own work 
 a caller's budget at all. The worst a lying family app achieves is to starve itself — and family
 callers are apps we signed, which is the same trust the family list already rests on.
 
-A paired (non-family) caller keeps its 30 a minute with the same split, proportionally: background
-at most 25, the user's own calls up to 30.
+Two properties this rests on, both checked in the library rather than assumed:
 
-### 8.4 What a refused user call must do
+* **`RateLimiter` is a per-key sliding window keyed on `caller.packageName`**, and family apps do
+  not share a uid (one signing key per app), so no caller's package can alias another's bucket.
+* **A refused call is not counted** — `allow` returns before it records the attempt — so a caller
+  being refused cannot drive itself, or anybody, further into refusal.
 
-Being refused is not the same as being lost. A call with `origin: user` that is refused for
-`rate_limited` is **retried under §7's floor** like any other, and the caller must not treat the
-refusal as an answer. 4Zones' own presses are the case in point: the owner pressed, nothing
+**A paired (non-family) caller keeps its 30 a minute, unsplit.** There is no reserve to give it:
+`Origin.read` returns `USER` only when the caller's standing is `FAMILY`, so a paired app's calls
+are always `model` and a reserve it could never reach would be a rule that reads as protection and
+is not.
+
+### 8.4 A refused user call is SAID, never retried
+
+**The library must not retry a call with `origin: user`.** §7's back-off is for background only.
+
+This is the 4Dictate PM's correction and it is right: under §7's floor a refused press could land
+ten to thirty seconds later, so **his desk would move after he had stopped expecting it**. A
+physical thing acting late is worse than a thing that did not act — a dot that is stale is a
+picture, a desk that rises unbidden is a surprise in the room.
+
+So a refused user call ends there, and **the surface says so**. That is what §9's counters are
+for, and it is why they are not optional: without them, "refused and not retried" looks exactly
+like "did nothing", which is precisely what the owner suffered on 21 November — he pressed, nothing
 happened, and nothing anywhere said why.
+
+With §8.2's reserve in place a `rate_limited` refusal of a user call should be close to impossible.
+The other reasons a user call can be refused — `not_granted`, `unknown_function`, `bad_arguments` —
+are not fixed by waiting, so there was never anything for a retry to buy.
 
 ### 8.5 Open for the owner
 
@@ -329,6 +362,10 @@ reachable.
 - 4Dictate and 4Home (4Dictate PM): providers; take the library, nothing else to change.
 - 4Zones, 4Keys (4Zones PM): subscriber rules in sections 4, 4a, 6 and 7, the read cap, and
   sections 8 to 10.
+- **§8 needs one change in the library before it can be enforced (4Dictate PM):** the origin is
+  read at `ProviderCore` *after* `gate.gateInvoke` has already decided, so `gateInvoke` gains an
+  origin parameter. The gate cannot reserve for a user's call while it is told who called only
+  afterwards.
 
 ## 12. Measured before sign-off
 
