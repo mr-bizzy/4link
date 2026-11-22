@@ -421,15 +421,15 @@ class StateTest {
         val c = caller(10001)
         repeat(120) { assertEquals(Decision.Allowed, gate.gateInvoke(c, State.GET)) }
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, State.GET) as Decision.Refused).code)
-        repeat(120) { assertEquals("the family's 120 are untouched", Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
-        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say") as Decision.Refused).code)
+        repeat(120) { assertEquals("the family's 120 are untouched", Decision.Allowed, gate.gateInvoke(c, "echo.say", Origin.USER)) }
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say", Origin.USER) as Decision.Refused).code)
         clock.now += 60_000
         assertEquals(Decision.Allowed, gate.gateInvoke(c, State.GET))
     }
 
-    @Test fun `using up the family's 120 leaves state get alone, and subscribe counts in the 120`() {
+    @Test fun `using up the family's background 100 leaves state get alone, and subscribe counts in it`() {
         val c = caller(10001)
-        repeat(119) { gate.gateInvoke(c, "echo.say") }
+        repeat(99) { gate.gateInvoke(c, "echo.say") }
         assertEquals(Decision.Allowed, gate.gateInvoke(c, State.SUBSCRIBE))
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, State.SUBSCRIBE) as Decision.Refused).code)
         assertEquals(Decision.Allowed, gate.gateInvoke(c, State.GET))

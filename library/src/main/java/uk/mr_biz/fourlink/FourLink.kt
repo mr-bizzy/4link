@@ -104,6 +104,16 @@ object FourLink {
     const val RATE_LIMIT_PER_MINUTE = 30
     /** A family caller's (owner, 2026-11-07): a slider or dial sweep is about 9 calls in 2 s (§15f). */
     const val RATE_LIMIT_FAMILY_PER_MINUTE = 120
+
+    /**
+     * State v2 §8: of a family caller's 120, this many are kept for calls declared `origin: user`;
+     * background (catalogue, links.list, any invoke the app made on its own) stops at 100. Owner,
+     * 2026-11-22: 20, "happy for now". `state.get` has its own limit and is in neither.
+     */
+    const val RESERVED_FOR_USER_PER_MINUTE = 20
+
+    /** State v2 §9: a family caller reads its own refusal counts from a provider. Built in; no app declares it. */
+    const val REFUSALS = "link.refusals"
     const val AUDIT_LIMIT = 500
 
     const val TITLE_MAX = 60

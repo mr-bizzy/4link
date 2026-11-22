@@ -31,9 +31,23 @@ class ProviderGate(
     private val familyRate: RateLimiter = RateLimiter(limit = FourLink.RATE_LIMIT_FAMILY_PER_MINUTE, now = now),
 ) {
 
-    /** Counts one call against the caller's own limit: 120 for family, 30 for a paired app. */
-    private fun allow(caller: Caller, standing: Standing): Boolean =
-        if (standing == Standing.FAMILY) familyRate.allow(caller.packageName) else rate.allow(caller.packageName)
+    /**
+     * Counts one call against the caller's own limit: 120 for family, 30 for a paired app. State v2
+     * §8: a family caller's background stops at 100, and only a call it declared `origin: user` may
+     * use the last 20, so a dot can never starve a press. Keyed on the caller's package, so a caller
+     * that declares everything `user` spends only its own budget. A paired caller is never `user`
+     * ([Origin.read]), so it keeps its 30 with no split.
+     */
+    private fun allow(caller: Caller, standing: Standing, origin: Origin = Origin.MODEL): Boolean =
+        if (standing != Standing.FAMILY) rate.allow(caller.packageName)
+        else if (origin == Origin.USER) familyRate.allow(caller.packageName)
+        else familyRate.allow(caller.packageName, FourLink.RATE_LIMIT_FAMILY_PER_MINUTE - FourLink.RESERVED_FOR_USER_PER_MINUTE)
+
+    /** State v2 §9: refusals per caller and reason, readable on a release build. */
+    private val counts = RefusalCounts(now)
+
+    /** [packageName]'s refusals by reason code, for this minute and since the process started. */
+    fun refusals(packageName: String): Map<String, RefusalCount> = counts.of(packageName)
 
 
     /** Family, paired (still the same app, still installed) or unknown (§4 `hello`). */
@@ -57,10 +71,11 @@ class ProviderGate(
         val standing = standing(caller)
         val decision = when {
             standing == Standing.UNKNOWN -> Decision.Refused(ErrorCode.NOT_PAIRED, NOT_PAIRED_SENTENCE)
+            // State v2 §8: a catalogue is always background; it carries no origin.
             !allow(caller, standing) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
             else -> Decision.Allowed
         }
-        audit.record(AuditEntry(now(), caller.packageName, FourLink.METHOD_CATALOGUE, resultOf(decision)))
+        record(caller.packageName, FourLink.METHOD_CATALOGUE, resultOf(decision))
         return decision
     }
 
@@ -69,7 +84,7 @@ class ProviderGate(
      * function's existence is the provider's question, asked first by the
      * caller of this method; here only WHO may call it.
      */
-    fun gateInvoke(caller: Caller, functionId: String): Decision {
+    fun gateInvoke(caller: Caller, functionId: String, origin: Origin = Origin.MODEL): Decision {
         val standing = standing(caller)
         val decision = when {
             standing == Standing.UNKNOWN -> Decision.Refused(ErrorCode.NOT_PAIRED, NOT_PAIRED_SENTENCE)
@@ -80,7 +95,7 @@ class ProviderGate(
             functionId == State.GET ->
                 if (stateRate.allow(caller.packageName)) Decision.Allowed
                 else Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
-            !allow(caller, standing) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
+            !allow(caller, standing, origin) -> Decision.Refused(ErrorCode.RATE_LIMITED, RATE_LIMITED_SENTENCE)
             standing == Standing.PAIRED && pairings.get(caller.packageName)?.allows(functionId) != true ->
                 Decision.Refused(ErrorCode.NOT_GRANTED, "This app was not allowed to use that.")
             else -> Decision.Allowed
@@ -104,6 +119,7 @@ class ProviderGate(
     /** The audit line for a finished invoke (or a refused one). */
     fun record(callerPackage: String, what: String, result: String) {
         audit.record(AuditEntry(now(), callerPackage, what, result))
+        if (result != "ok") counts.add(callerPackage, result)
     }
 
     fun resultOf(decision: Decision): String = when (decision) {

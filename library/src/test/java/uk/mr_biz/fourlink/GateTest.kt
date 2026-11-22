@@ -108,14 +108,16 @@ class GateTest {
         assertEquals(Decision.Allowed, gate.gateInvoke(c, "echo.say"))
     }
 
-    @Test fun `a family app gets 120 a minute across catalogue and invoke, the 121st is refused`() {
+    @Test fun `a family app gets 120 a minute across catalogue and invoke, background 100 of them, the 121st is refused`() {
         assertEquals(120, FourLink.RATE_LIMIT_FAMILY_PER_MINUTE)
         assertEquals(30, FourLink.RATE_LIMIT_PER_MINUTE)
         val c = caller(10001)
-        repeat(119) { assertEquals("call ${it + 1}", Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
+        repeat(99) { assertEquals("call ${it + 1}", Decision.Allowed, gate.gateInvoke(c, "echo.say")) }
         assertEquals(Decision.Allowed, gate.gateCatalogue(c))
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say") as Decision.Refused).code)
         assertEquals(ErrorCode.RATE_LIMITED, (gate.gateCatalogue(c) as Decision.Refused).code)
+        repeat(20) { assertEquals("user call ${it + 101}", Decision.Allowed, gate.gateInvoke(c, "echo.say", Origin.USER)) }
+        assertEquals(ErrorCode.RATE_LIMITED, (gate.gateInvoke(c, "echo.say", Origin.USER) as Decision.Refused).code)
         clock.now += 60_000
         assertEquals(Decision.Allowed, gate.gateInvoke(c, "echo.say"))
     }

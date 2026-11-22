@@ -14,11 +14,18 @@ class RateLimiter(
     private val calls = hashMapOf<String, ArrayDeque<Long>>()
 
     /** Counts the call and says whether it is within the limit. */
-    @Synchronized fun allow(key: String): Boolean {
+    @Synchronized fun allow(key: String): Boolean = allow(key, limit)
+
+    /**
+     * As [allow], but this call may only use the first [upTo] places of the window (State v2 §8:
+     * background up to 100 of a family caller's 120, the user's own call all of it). A refused call
+     * is not counted, so being refused never drives a caller further into refusal.
+     */
+    @Synchronized fun allow(key: String, upTo: Int): Boolean {
         val t = now()
         val q = calls.getOrPut(key) { ArrayDeque() }
         while (q.isNotEmpty() && t - q.first() >= windowMs) q.removeFirst()
-        if (q.size >= limit) return false
+        if (q.size >= minOf(upTo, limit)) return false
         q.addLast(t)
         return true
     }

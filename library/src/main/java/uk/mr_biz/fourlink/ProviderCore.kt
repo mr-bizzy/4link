@@ -67,12 +67,15 @@ class ProviderCore(
     fun invoke(caller: Caller?, functionId: String?, argumentsJson: String?, versionRead: String?, originWire: String? = null): Reply {
         if (caller == null) return unidentified()
         val id = functionId.orEmpty()
-        val gated = gate.gateInvoke(caller, id)
+        // §4c: missing, unknown, or from anyone but family, it is a model's choice. Read BEFORE the
+        // gate: State v2 §8 keeps the last of the budget for the user's own calls.
+        val origin = Origin.read(originWire, gate.standing(caller))
+        val gated = gate.gateInvoke(caller, id, origin)
         if (gated is Decision.Refused) {
             gate.record(caller.packageName, id, gated.code.wire)
             return Reply.Error(gated.code, gated.message)
         }
-        val function = catalogue().find(id)
+        val function = withBuiltIns(caller, catalogue()).find(id)
         if (function == null || !majorMatches(function, versionRead)) {
             return refuse(caller, id, ErrorCode.UNKNOWN_FUNCTION, "No function called “$id” (version ${versionRead ?: "?"}).")
         }
@@ -80,8 +83,11 @@ class ProviderCore(
             return refuse(caller, id, ErrorCode.BAD_ARGUMENTS, "Bad arguments: $why.")
         }
         val arguments = JSONObject(argumentsJson ?: "{}")
-        // §4c: missing, unknown, or from anyone but family, it is a model's choice.
-        val withOrigin = caller.copy(origin = Origin.read(originWire, gate.standing(caller)))
+        val withOrigin = caller.copy(origin = origin)
+        if (function.id == FourLink.REFUSALS) {
+            gate.record(caller.packageName, id, "ok")
+            return Reply.Json(refusalsJson(caller))
+        }
         // §3d: a user-only function is refused unless the user triggered the call, here, so no provider can forget.
         if (function.userOnly) Origin.refuseUnlessUser(withOrigin)?.let { r ->
             return refuse(caller, id, ErrorCode.REFUSED, r.message, reason = r.reason, fixable = r.fixable)
@@ -104,6 +110,23 @@ class ProviderCore(
         }
     }
 
+    /**
+     * State v2 §9: [FourLink.REFUSALS], for family callers only, answered by id and never listed in
+     * the catalogue (a surface that offers catalogue functions as actions must not offer it).
+     */
+    private fun withBuiltIns(caller: Caller, c: Catalogue): Catalogue =
+        if (gate.standing(caller) != Standing.FAMILY || c.find(FourLink.REFUSALS) != null) c
+        else c.copy(functions = c.functions + REFUSALS_SPEC)
+
+    /** The caller's own counts, never another caller's. */
+    private fun refusalsJson(caller: Caller): String {
+        val o = JSONObject()
+        for ((reason, n) in gate.refusals(caller.packageName)) {
+            o.put(reason, JSONObject().put("minute", n.minute).put("total", n.total))
+        }
+        return JSONObject().put("refusals", o.toString()).toString()
+    }
+
     /** A caller sends the major it read (§10); absent means "whatever you have", for family tools and tests. */
     private fun majorMatches(function: FunctionSpec, versionRead: String?): Boolean {
         val read = versionRead?.trim()?.takeIf { it.isNotEmpty() } ?: return true
@@ -123,6 +146,16 @@ class ProviderCore(
         // §11b: a token a provider may not declare (malformed, or unprefixed and not core) is
         // dropped, never sent; the sentence and `fixable` still go.
         return Reply.Error(code, message, suggestion, reason?.takeIf(FourLink::mayDeclareReason), fixable)
+    }
+
+    companion object {
+        val REFUSALS_SPEC = FunctionSpec(
+            FourLink.REFUSALS, "1.0", "Refusals",
+            "How many of your own calls this app refused, by reason, in the last minute and since it started. Not for a person's request.",
+            Effect.READ,
+            Schema.NOTHING,
+            Schema.Obj(mapOf("refusals" to Schema.Str(description = "JSON object: reason to {minute, total}"))),
+        )
     }
 
     private fun unidentified(): Reply.Error =
