@@ -20,5 +20,12 @@
         <item>52bf661f8b14e2fbf716bb6a432645ca88ce8e2b8ad46360fbacb689c8ed49cc</item>
         <!-- 4StreamDeck's own release certificate (owner, 2026-11-06). -->
         <item>5c1c3f9c55247b189adf337b6509a3774488068ccf323cdeea91c680261f7e63</item>
+        <!-- 4Keys' own release certificate (owner, 2026-11-16). 4StreamDeck RENAMED: STREAM DECK is
+             Corsair's mark and the old name contained the whole of it. New package
+             (uk.mr_biz.fourkeys), new key, and Play's app signing key CHANGED to ours so this
+             digest is the one a device sees — the same shape as every other app here, and the
+             reason 4Screenshots was invisible in October was that it was not.
+             BOTH are listed for the changeover; the old one comes out when he has moved over. -->
+        <item>3dab05fabf4fe864abae0bffa03589716eaedbd80701d1264cd802eea387947a</item>
     </string-array>
 </resources>

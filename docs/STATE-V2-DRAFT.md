@@ -318,6 +318,11 @@ An app's own version says nothing about what it can speak. What matters is which
 carries, and that is what the catalogue's `version` already reports (§10). Nothing new is needed:
 a v2 library announces itself the way every version has.
 
+**So the version moves whenever behaviour does.** Until 1.1 it did not have to: 4Keys carried the
+library at `a2711a7` and 4Zones at `7cc51c6`, both saying 1.0, and the difference was only the family
+list. From 1.1, a change a caller could observe on the wire or at the gate bumps at least the minor
+(the 4Zones PM's point, 2026-11-22).
+
 ### 10.3 The four combinations, all of which must work
 
 | provider | subscriber | what happens |

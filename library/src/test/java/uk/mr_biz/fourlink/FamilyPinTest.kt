@@ -20,6 +20,14 @@ class FamilyPinTest {
     private val fourScreenshots = FourLink.FOURSCREENSHOTS_RELEASE_DIGEST
     private val fourPdfs = FourLink.FOURPDFS_RELEASE_DIGEST
     private val fourStreamDeck = FourLink.FOURSTREAMDECK_RELEASE_DIGEST
+
+    /**
+     * 4Keys — 4StreamDeck under a name of its own (owner, 16 Nov 2026). **The deck is in this list
+     * twice, on purpose and not for ever**: the old app is still installed and on internal testing,
+     * so taking its digest out now would drop his working deck out of the family before the new one
+     * is installed. One line, when he has moved over.
+     */
+    private val fourKeys = FourLink.FOURKEYS_RELEASE_DIGEST
     private val debug = "90a86f317bf69419e362a09e9a8de99349ba8b2d7dd3e4af341c5ffd48b7404d"
 
     private fun digestsIn(file: File): List<String> =
@@ -33,11 +41,11 @@ class FamilyPinTest {
         }.toMap()
 
     @Test fun `release trusts the release certificates and nothing else`() {
-        assertEquals(listOf(fourZones, release, fourTasks, fourHome, fourScreenshots, fourPdfs, fourStreamDeck), digestsIn(defining().getValue("main")))
+        assertEquals(listOf(fourZones, release, fourTasks, fourHome, fourScreenshots, fourPdfs, fourStreamDeck, fourKeys), digestsIn(defining().getValue("main")))
     }
 
     @Test fun `debug adds the workstation debug certificate and keeps the release ones`() {
-        assertEquals(listOf(fourZones, release, fourTasks, fourHome, fourScreenshots, fourPdfs, fourStreamDeck, debug), digestsIn(defining().getValue("debug")))
+        assertEquals(listOf(fourZones, release, fourTasks, fourHome, fourScreenshots, fourPdfs, fourStreamDeck, fourKeys, debug), digestsIn(defining().getValue("debug")))
     }
 
     @Test fun `only main and debug define the list`() {

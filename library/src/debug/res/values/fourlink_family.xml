@@ -11,6 +11,8 @@
         <item>6599bca48b5a7628663bf118d9d5990f78f36100e6266c213fc1991e7770e60f</item>
         <item>52bf661f8b14e2fbf716bb6a432645ca88ce8e2b8ad46360fbacb689c8ed49cc</item>
         <item>5c1c3f9c55247b189adf337b6509a3774488068ccf323cdeea91c680261f7e63</item>
+        <!-- 4Keys (owner, 2026-11-16): the rename, new package and new key. -->
+        <item>3dab05fabf4fe864abae0bffa03589716eaedbd80701d1264cd802eea387947a</item>
         <item>90a86f317bf69419e362a09e9a8de99349ba8b2d7dd3e4af341c5ffd48b7404d</item>
     </string-array>
 </resources>
